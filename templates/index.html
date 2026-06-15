@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AI Client Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ───────────── SIDEBAR ───────────── -->
+  <nav class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">●</div>
+      <div class="brand-text">
+        <div class="brand-name">AI Client Agent</div>
+        <div class="brand-tag">Outreach, automated</div>
+      </div>
+    </div>
+
+    <div class="nav-links">
+      <button class="nav-link active" data-tab="dashboard">
+        <span class="nav-icon">◎</span> Dashboard
+      </button>
+      <button class="nav-link" data-tab="setup">
+        <span class="nav-icon">⚙</span> Setup
+      </button>
+      <button class="nav-link" data-tab="billing">
+        <span class="nav-icon">◆</span> Billing
+      </button>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="license-pill" id="license-pill">
+        <span class="dot" id="license-dot"></span>
+        <span id="license-text">Checking…</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ───────────── MAIN ───────────── -->
+  <main class="main">
+
+    <!-- ============ DASHBOARD TAB ============ -->
+    <section class="tab-panel active" id="tab-dashboard">
+      <header class="page-header">
+        <div>
+          <h1>Dashboard</h1>
+          <p class="subtitle">Find new clients and follow up on replies — one tap.</p>
+        </div>
+      </header>
+
+      <div class="grid-2">
+        <!-- Launch card -->
+        <div class="card launch-card">
+          <div class="radar" id="radar">
+            <div class="radar-ring r1"></div>
+            <div class="radar-ring r2"></div>
+            <div class="radar-ring r3"></div>
+            <button class="launch-btn" id="btn-run">
+              <span class="launch-icon">▶</span>
+              <span class="launch-label">Find Clients<br>&amp; Send Emails</span>
+            </button>
+          </div>
+          <button class="secondary-btn" id="btn-replies">
+            <span>✉</span> Check Replies
+          </button>
+          <p class="hint" id="run-hint">Ready when you are.</p>
+        </div>
+
+        <!-- Stats card -->
+        <div class="card stats-card">
+          <div class="stat">
+            <div class="stat-value" id="stat-sent">—</div>
+            <div class="stat-label">Emails sent (all time)</div>
+          </div>
+          <div class="divider"></div>
+          <div class="stat">
+            <div class="stat-value" id="stat-trial">—</div>
+            <div class="stat-label" id="stat-trial-label">Plan status</div>
+          </div>
+          <div class="divider"></div>
+          <div class="profile-mini">
+            <div class="profile-mini-row"><span>Service</span><strong id="mini-service">—</strong></div>
+            <div class="profile-mini-row"><span>City</span><strong id="mini-city">—</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live log -->
+      <div class="card terminal-card">
+        <div class="terminal-header">
+          <span class="terminal-dot"></span>
+          <span class="terminal-dot"></span>
+          <span class="terminal-dot"></span>
+          <span class="terminal-title">Activity log</span>
+        </div>
+        <div class="terminal-body" id="terminal">
+          <div class="terminal-line muted">Waiting for first run…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SETUP TAB ============ -->
+    <section class="tab-panel" id="tab-setup">
+      <header class="page-header">
+        <div>
+          <h1>Setup</h1>
+          <p class="subtitle">Tell the agent who you are, what you offer, and where to find clients.</p>
+        </div>
+      </header>
+
+      <div class="card form-card">
+        <form id="setup-form">
+
+          <div class="form-section">
+            <div class="form-section-title">What's your work?</div>
+            <label class="field">
+              <span class="field-label">Pick the closest match</span>
+              <select id="preset-select">
+                <option value="">— Select your profession —</option>
+                <option value="photographer">Photographer (weddings &amp; events)</option>
+                <option value="web_designer">Web Designer / Developer</option>
+                <option value="interior_designer">Interior Designer</option>
+                <option value="social_media">Social Media Manager</option>
+                <option value="video_editor">Video Editor / Content Creator</option>
+                <option value="accountant">Accountant / Bookkeeper</option>
+                <option value="cybersecurity">Cybersecurity / Website Security</option>
+                <option value="logo_designer">Logo &amp; Branding Designer</option>
+                <option value="custom">Something else (fill in manually)</option>
+              </select>
+              <span class="field-hint">This fills in suggested wording below — edit anything you like afterwards.</span>
+            </label>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section-title">About you</div>
+
+            <label class="field">
+              <span class="field-label">Your name</span>
+              <input type="text" name="YOUR_NAME" placeholder="e.g. Prince">
+            </label>
+
+            <label class="field">
+              <span class="field-label">Your service</span>
+              <input type="text" name="YOUR_SERVICE" placeholder="e.g. Website &amp; API Security Scan">
+              <span class="field-hint">Be specific — this is what clients will see.</span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">About you (2–3 lines)</span>
+              <textarea name="YOUR_ABOUT" rows="3" placeholder="A short, friendly intro about what you do and who you help."></textarea>
+            </label>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section-title">Where to find clients</div>
+
+            <label class="field">
+              <span class="field-label">Target city</span>
+              <input type="text" name="TARGET_CITY" placeholder="e.g. Palanpur, Gujarat">
+            </label>
+
+            <label class="field">
+              <span class="field-label">Types of businesses to contact</span>
+              <input type="text" name="BUSINESS_TYPES" placeholder="shop, restaurant, clinic, hotel, school">
+              <span class="field-hint">Comma-separated. Pick the kinds of businesses most likely to need your service. The preset above fills in good defaults.</span>
+            </label>
+          </div>
+
+
+          <div class="form-section">
+            <div class="form-section-title">Your email (for sending &amp; receiving)</div>
+
+            <label class="field">
+              <span class="field-label">Gmail address</span>
+              <input type="email" name="GMAIL_ADDRESS" placeholder="you@gmail.com">
+            </label>
+
+            <label class="field">
+              <span class="field-label">Gmail App Password</span>
+              <input type="text" name="GMAIL_APP_PASSWORD" placeholder="16-character app password">
+              <span class="field-hint">
+                Not your normal password. Generate one free at
+                <a href="https://myaccount.google.com/apppasswords" target="_blank">myaccount.google.com/apppasswords</a>
+                (requires 2-Step Verification).
+              </span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Email used for your license</span>
+              <input type="email" name="YOUR_EMAIL" placeholder="Same as your Gmail address, usually">
+            </label>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section-title">Attachment <span class="optional">(optional)</span></div>
+            <label class="field">
+              <span class="field-label">Portfolio / sample work filename</span>
+              <input type="text" name="ATTACHMENT_PATH" placeholder="e.g. Portfolio.pdf">
+              <span class="field-hint">Place the file in this app's folder, then type its filename here.</span>
+            </label>
+          </div>
+
+          <button type="submit" class="primary-btn" id="btn-save">Save profile</button>
+          <span class="save-status" id="save-status"></span>
+        </form>
+      </div>
+    </section>
+
+    <!-- ============ BILLING TAB ============ -->
+    <section class="tab-panel" id="tab-billing">
+      <header class="page-header">
+        <div>
+          <h1>Billing</h1>
+          <p class="subtitle">Your plan, trial status, and how to upgrade.</p>
+        </div>
+      </header>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="form-section-title">Current plan</div>
+          <div class="plan-status" id="plan-status">
+            <span class="dot" id="plan-dot"></span>
+            <span id="plan-text">Checking…</span>
+          </div>
+          <p class="hint" id="plan-detail"></p>
+        </div>
+
+        <div class="card pricing-card">
+          <div class="form-section-title">Pricing</div>
+          <div class="price-row">
+            <div>
+              <div class="price-name">Free trial</div>
+              <div class="price-sub">Full features</div>
+            </div>
+            <div class="price-amount">5 days</div>
+          </div>
+          <div class="price-row featured">
+            <div>
+              <div class="price-name">Monthly plan</div>
+              <div class="price-sub">Unlimited runs, updates, support</div>
+            </div>
+            <div class="price-amount">₹5,000<span>/mo</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="form-section-title">How to activate</div>
+        <ol class="steps-list">
+          <li>Pay <strong>₹5,000</strong> via UPI — see <code>PAYMENT.txt</code> in this folder for the UPI ID.</li>
+          <li>Send the payment screenshot and the email you used in Setup.</li>
+          <li>You'll receive a <strong>license key</strong> within a few hours.</li>
+          <li>Paste it below and click Save.</li>
+        </ol>
+
+        <label class="field" style="margin-top: 16px;">
+          <span class="field-label">License key</span>
+          <input type="text" id="license-input" placeholder="Paste your license key here">
+        </label>
+        <button class="primary-btn" id="btn-save-license">Save license key</button>
+        <span class="save-status" id="license-save-status"></span>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
