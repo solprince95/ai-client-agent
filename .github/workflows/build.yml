@@ -41,9 +41,7 @@ jobs:
           mkdir -p pkg
           cp dist/AI_Client_Agent pkg/AI_Client_Agent-Linux
           cp Install_Linux.sh pkg/
-          ls -la pkg/
-          zip -j AI_Client_Agent-Linux.zip pkg/AI_Client_Agent-Linux pkg/Install_Linux.sh
-          ls -la *.zip
+          chmod +x pkg/Install_Linux.sh
 
       - name: Package (macOS)
         if: runner.os == 'macOS'
@@ -51,8 +49,7 @@ jobs:
           mkdir -p pkg
           cp dist/AI_Client_Agent pkg/AI_Client_Agent-macOS
           cp Install_macOS.sh pkg/
-          zip -j AI_Client_Agent-macOS.zip pkg/AI_Client_Agent-macOS pkg/Install_macOS.sh
-          ls -la *.zip
+          chmod +x pkg/Install_macOS.sh
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
@@ -61,10 +58,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path pkg
           Copy-Item "dist\AI_Client_Agent.exe" "pkg\AI_Client_Agent-Windows.exe"
           Copy-Item "Install_Windows.bat" "pkg\"
-          Compress-Archive -Path "pkg\*" -DestinationPath "AI_Client_Agent-Windows.zip" -Force
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: ${{ matrix.asset_name }}.zip
+          path: pkg/
