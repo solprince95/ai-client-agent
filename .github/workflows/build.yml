@@ -1,12 +1,5 @@
 name: Build AI Client Agent Executables
 
-# Builds a standalone double-click executable for Windows, macOS, and
-# Linux every time you push to the repo, or manually via the
-# "Run workflow" button on GitHub.
-#
-# Download the results from the "Actions" tab → pick the latest run
-# → scroll to "Artifacts" at the bottom.
-
 on:
   push:
     branches: [ main, master ]
@@ -19,13 +12,16 @@ jobs:
         include:
           - os: windows-latest
             artifact_name: AI_Client_Agent.exe
-            asset_name: AI_Client_Agent-Windows.exe
+            asset_name: AI_Client_Agent-Windows
+            installer: Install_Windows.bat
           - os: macos-latest
             artifact_name: AI_Client_Agent
             asset_name: AI_Client_Agent-macOS
+            installer: Install_macOS.sh
           - os: ubuntu-latest
             artifact_name: AI_Client_Agent
             asset_name: AI_Client_Agent-Linux
+            installer: Install_Linux.sh
 
     runs-on: ${{ matrix.os }}
 
@@ -45,8 +41,27 @@ jobs:
       - name: Build executable
         run: pyinstaller AI_Client_Agent.spec --noconfirm
 
+      - name: Package with installer (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p release_pkg
+          cp dist/${{ matrix.artifact_name }} release_pkg/${{ matrix.asset_name }}
+          cp ${{ matrix.installer }} release_pkg/
+          chmod +x release_pkg/${{ matrix.installer }}
+          cd release_pkg
+          zip -r ../${{ matrix.asset_name }}.zip .
+
+      - name: Package with installer (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path release_pkg
+          Copy-Item "dist\${{ matrix.artifact_name }}" "release_pkg\${{ matrix.asset_name }}.exe"
+          Copy-Item "${{ matrix.installer }}" "release_pkg\"
+          Compress-Archive -Path "release_pkg\*" -DestinationPath "${{ matrix.asset_name }}.zip" -Force
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: dist/${{ matrix.artifact_name }}
+          path: ${{ matrix.asset_name }}.zip
