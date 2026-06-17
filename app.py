@@ -203,7 +203,23 @@ if __name__ == "__main__":
     print("  Keep this window open while you use the app.")
     print("  Close this window to stop the agent.\n")
 
-    threading.Timer(1.2, lambda: webbrowser.open(url)).start()
+def open_browser():
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+        try:
+            import subprocess, sys
+            if sys.platform.startswith("linux"):
+                subprocess.Popen(["xdg-open", url],
+                                 stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", url])
+        except Exception:
+            pass
+
+    threading.Timer(1.2, open_browser).start()
 import webbrowser
 import threading
 
