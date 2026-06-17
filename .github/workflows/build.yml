@@ -11,13 +11,10 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            artifact_name: AI_Client_Agent.exe
             asset_name: AI_Client_Agent-Windows
           - os: macos-latest
-            artifact_name: AI_Client_Agent
             asset_name: AI_Client_Agent-macOS
           - os: ubuntu-latest
-            artifact_name: AI_Client_Agent
             asset_name: AI_Client_Agent-Linux
 
     runs-on: ${{ matrix.os }}
@@ -41,30 +38,30 @@ jobs:
       - name: Package (Linux)
         if: runner.os == 'Linux'
         run: |
-          mkdir -p release_pkg
-          cp dist/AI_Client_Agent release_pkg/AI_Client_Agent-Linux
-          cp Install_Linux.sh release_pkg/
-          ls -la release_pkg/
-          cd release_pkg && zip -r ../AI_Client_Agent-Linux.zip .
+          mkdir -p pkg
+          cp dist/AI_Client_Agent pkg/AI_Client_Agent-Linux
+          cp Install_Linux.sh pkg/
+          ls -la pkg/
+          zip -j AI_Client_Agent-Linux.zip pkg/AI_Client_Agent-Linux pkg/Install_Linux.sh
+          ls -la *.zip
 
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: |
-          mkdir -p release_pkg
-          cp dist/AI_Client_Agent release_pkg/AI_Client_Agent-macOS
-          cp Install_macOS.sh release_pkg/
-          ls -la release_pkg/
-          cd release_pkg && zip -r ../AI_Client_Agent-macOS.zip .
+          mkdir -p pkg
+          cp dist/AI_Client_Agent pkg/AI_Client_Agent-macOS
+          cp Install_macOS.sh pkg/
+          zip -j AI_Client_Agent-macOS.zip pkg/AI_Client_Agent-macOS pkg/Install_macOS.sh
+          ls -la *.zip
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          New-Item -ItemType Directory -Force -Path release_pkg
-          Copy-Item "dist\AI_Client_Agent.exe" "release_pkg\AI_Client_Agent-Windows.exe"
-          Copy-Item "Install_Windows.bat" "release_pkg\"
-          Get-ChildItem release_pkg
-          Compress-Archive -Path "release_pkg\*" -DestinationPath "AI_Client_Agent-Windows.zip" -Force
+          New-Item -ItemType Directory -Force -Path pkg
+          Copy-Item "dist\AI_Client_Agent.exe" "pkg\AI_Client_Agent-Windows.exe"
+          Copy-Item "Install_Windows.bat" "pkg\"
+          Compress-Archive -Path "pkg\*" -DestinationPath "AI_Client_Agent-Windows.zip" -Force
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
