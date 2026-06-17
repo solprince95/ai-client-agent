@@ -203,7 +203,7 @@ if __name__ == "__main__":
     print("  Keep this window open while you use the app.")
     print("  Close this window to stop the agent.\n")
 
-def open_browser():
+    def open_browser():
         try:
             webbrowser.open(url)
         except Exception:
@@ -220,5 +220,4 @@ def open_browser():
             pass
 
     threading.Timer(1.2, open_browser).start()
-
-app.run(host="127.0.0.1", port=port, debug=False)
+    app.run(host="127.0.0.1", port=port, debug=False)
