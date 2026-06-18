@@ -66,9 +66,7 @@ def api_signup():
         if not user:
             return jsonify({"ok": False, "message": "Signup failed. Try again."})
         supabase.table("profiles").insert({"id": user.id, "full_name": full_name, "gmail": email}).execute()
-        session["user_id"] = user.id
-        session["user_email"] = email
-        return jsonify({"ok": True, "redirect": "/dashboard"})
+return jsonify({"ok": True, "confirm": True, "message": "Check your email and click the confirmation link to activate your account."})
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)})
 
