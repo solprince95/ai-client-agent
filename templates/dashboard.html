@@ -151,10 +151,47 @@ async function loadStatus() {
   else { msg.textContent='✅ Ready to run.'; btn.disabled=false; btn.textContent='▶ Run Agent'; note.textContent=`${data.days_left} trial day${data.days_left===1?'':'s'} remaining.`; }
 }
 async function saveProfile() {
-  const data = { full_name:document.getElementById('full_name').value, business_name:document.getElementById('business_name').value, your_service:document.getElementById('your_service').value, your_about:document.getElementById('your_about').value, target_city:document.getElementById('target_city').value, gmail:document.getElementById('gmail').value, gmail_app_password:document.getElementById('gmail_app_password').value };
-  const res = await fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-  const result = await res.json();
-  if (result.ok) { const msg=document.getElementById('save-msg'); msg.style.display='inline'; setTimeout(()=>msg.style.display='none',2500); loadStatus(); }
+  const msg = document.getElementById('save-msg');
+  const btn = document.querySelector('.save-btn');
+  const gmailPassword = document.getElementById('gmail_app_password').value.trim();
+  const data = {
+    full_name:document.getElementById('full_name').value,
+    business_name:document.getElementById('business_name').value,
+    your_service:document.getElementById('your_service').value,
+    your_about:document.getElementById('your_about').value,
+    target_city:document.getElementById('target_city').value,
+    gmail:document.getElementById('gmail').value
+  };
+  if (gmailPassword) data.gmail_app_password = gmailPassword;
+
+  btn.disabled = true;
+  msg.style.display = 'inline';
+  msg.style.color = '#555';
+  msg.textContent = 'Saving...';
+  try {
+    const res = await fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    const result = await res.json();
+    if (res.status === 401) {
+      window.location.href = '/';
+      return;
+    }
+    if (result.ok) {
+      msg.style.color = '#27ae60';
+      msg.textContent = 'Saved!';
+      document.getElementById('gmail_app_password').value = '';
+      await loadProfile();
+      await loadStatus();
+    } else {
+      msg.style.color = '#c0392b';
+      msg.textContent = result.message || 'Could not save profile.';
+    }
+  } catch (e) {
+    msg.style.color = '#c0392b';
+    msg.textContent = 'Network error. Please try again.';
+  } finally {
+    btn.disabled = false;
+    setTimeout(()=>msg.style.display='none',3500);
+  }
 }
 async function runAgent() {
   const btn = document.getElementById('run-btn');

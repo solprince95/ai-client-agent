@@ -1,4 +1,5 @@
 import threading, queue, os
+from datetime import datetime, timezone
 from flask import Flask, render_template, request, jsonify, Response, session, redirect
 from supabase import create_client, Client
 from functools import wraps
@@ -11,10 +12,63 @@ app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-change-me")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL else None
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
 OWNER_GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "AIzaSyC7BszKyHwmYqIfletuTQszUA_J2fH9siE")
 TRIAL_DAYS = 5
 _user_states = {}
+
+def _auth_error_message(error):
+    msg = str(error)
+    low = msg.lower()
+    if "email not confirmed" in low or "email_not_confirmed" in low:
+        return "Please confirm your email first. Check your inbox for the Supabase confirmation link."
+    if "invalid login credentials" in low or "invalid email or password" in low:
+        return "Invalid email or password."
+    if "supabase" in low or "api key" in low or "url" in low:
+        return "Authentication is not configured correctly. Check SUPABASE_URL and SUPABASE_KEY."
+    return msg or "Authentication failed. Please try again."
+
+def _require_supabase():
+    if not supabase:
+        return jsonify({"ok": False, "message": "Supabase is not configured. Set SUPABASE_URL and SUPABASE_KEY."}), 500
+    return None
+
+def _profile_defaults(uid, email=""):
+    return {
+        "id": uid,
+        "full_name": "",
+        "business_name": "",
+        "gmail": email,
+        "gmail_app_password": "",
+        "your_service": "",
+        "your_about": "",
+        "target_city": "",
+        "business_types": "",
+        "trial_start": None,
+        "is_paid": False,
+    }
+
+def _get_profile(uid):
+    res = supabase.table("profiles").select("*").eq("id", uid).execute()
+    if res.data:
+        return res.data[0]
+    return None
+
+def _ensure_profile(uid, email=""):
+    profile = _get_profile(uid)
+    if profile:
+        return profile
+    profile = _profile_defaults(uid, email)
+    supabase.table("profiles").insert(profile).execute()
+    return profile
+
+def _trial_days_left(profile):
+    trial_start = profile.get("trial_start")
+    if trial_start:
+        start = datetime.fromisoformat(trial_start.replace("Z", "+00:00"))
+        days_used = (datetime.now(start.tzinfo) - start).days
+        return max(TRIAL_DAYS - days_used, 0)
+    return TRIAL_DAYS
 
 def get_user_state(uid):
     if uid not in _user_states:
@@ -42,6 +96,9 @@ def dashboard():
 
 @app.route("/api/auth/signup", methods=["POST"])
 def api_signup():
+    err = _require_supabase()
+    if err:
+        return err
     data = request.get_json()
     email = data.get("email", "").strip()
     password = data.get("password", "").strip()
@@ -53,14 +110,25 @@ def api_signup():
         user = res.user
         if not user:
             return jsonify({"ok": False, "message": "Signup failed. Try again."})
-        if user and not res.session:
-            return jsonify({"ok": False, "message": "Account already registered. Please Sign In instead."})
-        return jsonify({"ok": True, "confirm": True, "message": "Check your email and click the confirmation link to activate your account."})
+        if res.session:
+            session["user_id"] = user.id
+            session["user_email"] = email
+            profile = _ensure_profile(user.id, email)
+            update = {}
+            if full_name and not profile.get("full_name"):
+                update["full_name"] = full_name
+            if update:
+                supabase.table("profiles").update(update).eq("id", user.id).execute()
+            return jsonify({"ok": True, "redirect": "/dashboard"})
+        return jsonify({"ok": True, "confirm": True, "message": "Account created. Check your email and click the confirmation link before signing in."})
     except Exception as e:
-        return jsonify({"ok": False, "message": str(e)})
+        return jsonify({"ok": False, "message": _auth_error_message(e)})
 
 @app.route("/api/auth/login", methods=["POST"])
 def api_login():
+    err = _require_supabase()
+    if err:
+        return err
     data = request.get_json()
     email = data.get("email", "").strip()
     password = data.get("password", "").strip()
@@ -71,15 +139,10 @@ def api_login():
             return jsonify({"ok": False, "message": "Invalid email or password."})
         session["user_id"] = user.id
         session["user_email"] = email
-        try:
-            existing = supabase.table("profiles").select("id").eq("id", user.id).execute()
-            if not existing.data:
-                supabase.table("profiles").insert({"id": user.id, "full_name": "", "gmail": email}).execute()
-        except Exception:
-            pass
+        _ensure_profile(user.id, email)
         return jsonify({"ok": True, "redirect": "/dashboard"})
     except Exception as e:
-        return jsonify({"ok": False, "message": "Invalid email or password."})
+        return jsonify({"ok": False, "message": _auth_error_message(e)})
 
 @app.route("/api/auth/logout", methods=["POST"])
 def api_logout():
@@ -89,18 +152,13 @@ def api_logout():
 @app.route("/api/profile", methods=["GET"])
 @login_required
 def api_get_profile():
+    err = _require_supabase()
+    if err:
+        return err
     uid = session["user_id"]
     try:
-        res = supabase.table("profiles").select("*").eq("id", uid).single().execute()
-        profile = res.data or {}
-        from datetime import datetime
-        trial_start = profile.get("trial_start")
-        if trial_start:
-            start = datetime.fromisoformat(trial_start.replace("Z", "+00:00"))
-            days_used = (datetime.now(start.tzinfo) - start).days
-            days_left = max(TRIAL_DAYS - days_used, 0)
-        else:
-            days_left = TRIAL_DAYS
+        profile = _ensure_profile(uid, session.get("user_email", ""))
+        days_left = _trial_days_left(profile)
         profile["days_left"] = days_left
         profile["trial_active"] = days_left > 0
         profile["is_paid"] = profile.get("is_paid", False)
@@ -112,11 +170,19 @@ def api_get_profile():
 @app.route("/api/profile", methods=["POST"])
 @login_required
 def api_save_profile():
+    err = _require_supabase()
+    if err:
+        return err
     uid = session["user_id"]
-    data = request.get_json()
+    data = request.get_json() or {}
     allowed = ["full_name", "business_name", "gmail", "gmail_app_password", "your_service", "your_about", "target_city", "business_types"]
-    update = {k: v for k, v in data.items() if k in allowed}
+    update = {k: v.strip() if isinstance(v, str) else v for k, v in data.items() if k in allowed}
+    if not update.get("gmail_app_password"):
+        update.pop("gmail_app_password", None)
     try:
+        profile = _ensure_profile(uid, session.get("user_email", ""))
+        if not profile.get("trial_start"):
+            update["trial_start"] = datetime.now(timezone.utc).isoformat()
         supabase.table("profiles").update(update).eq("id", uid).execute()
         return jsonify({"ok": True})
     except Exception as e:
@@ -125,19 +191,14 @@ def api_save_profile():
 @app.route("/api/status")
 @login_required
 def api_status():
+    err = _require_supabase()
+    if err:
+        return err
     uid = session["user_id"]
     state = get_user_state(uid)
     try:
-        res = supabase.table("profiles").select("*").eq("id", uid).single().execute()
-        profile = res.data or {}
-        from datetime import datetime
-        trial_start = profile.get("trial_start")
-        if trial_start:
-            start = datetime.fromisoformat(trial_start.replace("Z", "+00:00"))
-            days_used = (datetime.now(start.tzinfo) - start).days
-            days_left = max(TRIAL_DAYS - days_used, 0)
-        else:
-            days_left = TRIAL_DAYS
+        profile = _ensure_profile(uid, session.get("user_email", ""))
+        days_left = _trial_days_left(profile)
         required = ["full_name", "gmail", "gmail_app_password", "your_service", "your_about", "target_city"]
         profile_complete = all(profile.get(k, "").strip() for k in required)
         return jsonify({"ok": True, "profile_complete": profile_complete, "days_left": days_left, "is_paid": profile.get("is_paid", False), "running": state["running"]})

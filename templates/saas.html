@@ -151,6 +151,7 @@ function showAuth(mode) {
   document.getElementById('auth-name').style.display = isLogin ? 'none' : 'block';
   document.getElementById('auth-toggle-text').innerHTML = isLogin ? 'No account? <a onclick="toggleAuth()">Sign up free</a>' : 'Already have an account? <a onclick="toggleAuth()">Sign in</a>';
   document.querySelector('.auth-submit').textContent = isLogin ? 'Sign In' : 'Get Started Free';
+  document.getElementById('auth-error').style.color = '#c0392b';
   document.getElementById('auth-error').style.display = 'none';
 }
 function closeAuth() { document.getElementById('auth-overlay').classList.remove('show'); }
@@ -161,13 +162,19 @@ async function submitAuth() {
   const full_name = document.getElementById('auth-name').value.trim();
   const errEl = document.getElementById('auth-error');
   errEl.style.display = 'none';
+  errEl.style.color = '#c0392b';
+  if (!email || !password || (!isLogin && !full_name)) {
+    errEl.textContent = isLogin ? 'Email and password are required.' : 'Name, email, and password are required.';
+    errEl.style.display = 'block';
+    return;
+  }
   const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
   const body = isLogin ? {email,password} : {email,password,full_name};
   try {
     const res = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const data = await res.json();
-if (data.ok && data.confirm) { errEl.style.color='#27ae60'; errEl.textContent=data.message; errEl.style.display='block'; }
-else if (data.ok) { window.location.href = data.redirect; }
+    if (data.ok && data.confirm) { errEl.style.color='#27ae60'; errEl.textContent=data.message; errEl.style.display='block'; }
+    else if (data.ok) { window.location.href = data.redirect; }
     else { errEl.textContent = data.message; errEl.style.display = 'block'; }
   } catch(e) { errEl.textContent = 'Something went wrong.'; errEl.style.display = 'block'; }
 }
