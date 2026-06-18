@@ -1,31 +1,19 @@
-"""
-app.py — AI Client Agent SaaS
-Multi-user web app with Supabase auth, profile setup, and agent runner.
-"""
-
-import threading, queue, time, os, json
+import threading, queue, os
 from flask import Flask, render_template, request, jsonify, Response, session, redirect
 from supabase import create_client, Client
 from functools import wraps
-
 import agent_core
 from paths import get_resource_dir
 
 _resource_dir = get_resource_dir()
-app = Flask(
-    __name__,
-    template_folder=os.path.join(_resource_dir, "templates"),
-    static_folder=os.path.join(_resource_dir, "static"),
-)
+app = Flask(__name__, template_folder=os.path.join(_resource_dir, "templates"), static_folder=os.path.join(_resource_dir, "static"))
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-change-me")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL else None
-
 OWNER_GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "AIzaSyC7BszKyHwmYqIfletuTQszUA_J2fH9siE")
 TRIAL_DAYS = 5
-
 _user_states = {}
 
 def get_user_state(uid):
@@ -65,7 +53,7 @@ def api_signup():
         user = res.user
         if not user:
             return jsonify({"ok": False, "message": "Signup failed. Try again."})
-return jsonify({"ok": True, "confirm": True, "message": "Check your email and click the confirmation link to activate your account."})
+        return jsonify({"ok": True, "confirm": True, "message": "Check your email and click the confirmation link to activate your account."})
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)})
 
@@ -80,14 +68,13 @@ def api_login():
         if not user:
             return jsonify({"ok": False, "message": "Invalid email or password."})
         session["user_id"] = user.id
-# Create profile if doesn't exist
-try:
-    existing = supabase.table("profiles").select("id").eq("id", user.id).execute()
-    if not existing.data:
-        supabase.table("profiles").insert({"id": user.id, "full_name": "", "gmail": email}).execute()
-except:
-    pass
         session["user_email"] = email
+        try:
+            existing = supabase.table("profiles").select("id").eq("id", user.id).execute()
+            if not existing.data:
+                supabase.table("profiles").insert({"id": user.id, "full_name": "", "gmail": email}).execute()
+        except Exception:
+            pass
         return jsonify({"ok": True, "redirect": "/dashboard"})
     except Exception as e:
         return jsonify({"ok": False, "message": "Invalid email or password."})
@@ -125,8 +112,7 @@ def api_get_profile():
 def api_save_profile():
     uid = session["user_id"]
     data = request.get_json()
-    allowed = ["full_name", "business_name", "gmail", "gmail_app_password",
-               "your_service", "your_about", "target_city", "business_types"]
+    allowed = ["full_name", "business_name", "gmail", "gmail_app_password", "your_service", "your_about", "target_city", "business_types"]
     update = {k: v for k, v in data.items() if k in allowed}
     try:
         supabase.table("profiles").update(update).eq("id", uid).execute()
@@ -152,13 +138,7 @@ def api_status():
             days_left = TRIAL_DAYS
         required = ["full_name", "gmail", "gmail_app_password", "your_service", "your_about", "target_city"]
         profile_complete = all(profile.get(k, "").strip() for k in required)
-        return jsonify({
-            "ok": True,
-            "profile_complete": profile_complete,
-            "days_left": days_left,
-            "is_paid": profile.get("is_paid", False),
-            "running": state["running"],
-        })
+        return jsonify({"ok": True, "profile_complete": profile_complete, "days_left": days_left, "is_paid": profile.get("is_paid", False), "running": state["running"]})
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)})
 
@@ -210,7 +190,7 @@ def api_run():
             result = agent_core.run_full_pipeline(cfg, log=log)
             state["last_result"] = result
         except Exception as e:
-            log(f"❌ Unexpected error: {e}")
+            log(f"Unexpected error: {e}")
         finally:
             log("__DONE__")
             state["running"] = False
