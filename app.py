@@ -28,6 +28,22 @@ def _auth_error_message(error):
         return "Authentication is not configured correctly. Check SUPABASE_URL and SUPABASE_KEY."
     return msg or "Authentication failed. Please try again."
 
+def _profile_schema_error(error):
+    msg = str(error)
+    low = msg.lower()
+    if "pgrst204" not in low and "schema cache" not in low and "could not find" not in low:
+        return None
+    missing = None
+    marker = "could not find the '"
+    if marker in low:
+        start = low.find(marker) + len(marker)
+        end = low.find("'", start)
+        if end > start:
+            missing = low[start:end]
+    if missing:
+        return f"Database setup incomplete: profiles table is missing the '{missing}' column. Run supabase_profiles_schema.sql in Supabase SQL Editor, then retry."
+    return "Database setup incomplete: profiles table is missing required columns. Run supabase_profiles_schema.sql in Supabase SQL Editor, then retry."
+
 def _require_supabase():
     if not supabase:
         return jsonify({"ok": False, "message": "Supabase is not configured. Set SUPABASE_URL and SUPABASE_KEY."}), 500
@@ -58,9 +74,15 @@ def _ensure_profile(uid, email=""):
     profile = _get_profile(uid)
     if profile:
         return profile
-    profile = _profile_defaults(uid, email)
+    profile = {"id": uid, "full_name": "", "gmail": email}
     supabase.table("profiles").insert(profile).execute()
     return profile
+
+def _ensure_profile_after_auth(uid, email=""):
+    try:
+        _ensure_profile(uid, email)
+    except Exception as e:
+        app.logger.warning("Could not create profile for %s after auth: %s", uid, e)
 
 def _trial_days_left(profile):
     trial_start = profile.get("trial_start")
@@ -113,12 +135,15 @@ def api_signup():
         if res.session:
             session["user_id"] = user.id
             session["user_email"] = email
-            profile = _ensure_profile(user.id, email)
+            profile = _get_profile(user.id) or {}
             update = {}
             if full_name and not profile.get("full_name"):
                 update["full_name"] = full_name
             if update:
-                supabase.table("profiles").update(update).eq("id", user.id).execute()
+                try:
+                    supabase.table("profiles").update(update).eq("id", user.id).execute()
+                except Exception as e:
+                    app.logger.warning("Could not save signup profile name for %s: %s", user.id, e)
             return jsonify({"ok": True, "redirect": "/dashboard"})
         return jsonify({"ok": True, "confirm": True, "message": "Account created. Check your email and click the confirmation link before signing in."})
     except Exception as e:
@@ -139,7 +164,7 @@ def api_login():
             return jsonify({"ok": False, "message": "Invalid email or password."})
         session["user_id"] = user.id
         session["user_email"] = email
-        _ensure_profile(user.id, email)
+        _ensure_profile_after_auth(user.id, email)
         return jsonify({"ok": True, "redirect": "/dashboard"})
     except Exception as e:
         return jsonify({"ok": False, "message": _auth_error_message(e)})
@@ -165,7 +190,7 @@ def api_get_profile():
         profile.pop("gmail_app_password", None)
         return jsonify({"ok": True, "profile": profile})
     except Exception as e:
-        return jsonify({"ok": False, "message": str(e)})
+        return jsonify({"ok": False, "message": _profile_schema_error(e) or str(e)})
 
 @app.route("/api/profile", methods=["POST"])
 @login_required
@@ -186,7 +211,7 @@ def api_save_profile():
         supabase.table("profiles").update(update).eq("id", uid).execute()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "message": str(e)})
+        return jsonify({"ok": False, "message": _profile_schema_error(e) or str(e)})
 
 @app.route("/api/status")
 @login_required
@@ -203,7 +228,7 @@ def api_status():
         profile_complete = all(profile.get(k, "").strip() for k in required)
         return jsonify({"ok": True, "profile_complete": profile_complete, "days_left": days_left, "is_paid": profile.get("is_paid", False), "running": state["running"]})
     except Exception as e:
-        return jsonify({"ok": False, "message": str(e)})
+        return jsonify({"ok": False, "message": _profile_schema_error(e) or str(e)})
 
 def _build_config(profile):
     business_types = profile.get("business_types") or ["small business","shop","store","restaurant","hotel","clinic","school","agency","company"]
