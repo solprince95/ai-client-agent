@@ -51,8 +51,10 @@ def api_signup():
     try:
         res = supabase.auth.sign_up({"email": email, "password": password})
         user = res.user
-        if not user:
+if not user:
             return jsonify({"ok": False, "message": "Signup failed. Try again."})
+        if not res.session and res.user:
+            return jsonify({"ok": False, "message": "Account already registered. Please Sign In instead."})
         return jsonify({"ok": True, "confirm": True, "message": "Check your email and click the confirmation link to activate your account."})
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)})
