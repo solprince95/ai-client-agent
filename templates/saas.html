@@ -173,7 +173,16 @@ async function submitAuth() {
   try {
     const res = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const data = await res.json();
-    if (data.ok && data.confirm) { errEl.style.color='#27ae60'; errEl.textContent=data.message; errEl.style.display='block'; }
+    if (data.ok && data.confirm) {
+      errEl.style.color='#27ae60';
+      errEl.textContent=data.message;
+      errEl.style.display='block';
+      isLogin = true;
+      document.getElementById('auth-title').textContent = 'Email Sent';
+      document.getElementById('auth-name').style.display = 'none';
+      document.getElementById('auth-toggle-text').innerHTML = "Confirmed your email? <a onclick=\"showAuth('login')\">Click Sign In</a>";
+      document.querySelector('.auth-submit').textContent = 'Sign In';
+    }
     else if (data.ok) { window.location.href = data.redirect; }
     else { errEl.textContent = data.message; errEl.style.display = 'block'; }
   } catch(e) { errEl.textContent = 'Something went wrong.'; errEl.style.display = 'block'; }

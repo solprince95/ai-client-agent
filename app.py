@@ -145,7 +145,7 @@ def api_signup():
                 except Exception as e:
                     app.logger.warning("Could not save signup profile name for %s: %s", user.id, e)
             return jsonify({"ok": True, "redirect": "/dashboard"})
-        return jsonify({"ok": True, "confirm": True, "message": "Account created. Check your email and click the confirmation link before signing in."})
+        return jsonify({"ok": True, "confirm": True, "message": "Check your email. After confirming your account, click Sign In."})
     except Exception as e:
         return jsonify({"ok": False, "message": _auth_error_message(e)})
 
