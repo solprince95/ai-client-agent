@@ -1,15 +1,14 @@
 """
-app.py — AI Client Agent Dashboard
-Local web app: run `python app.py`, then open http://127.0.0.1:5000
-Also works as a PyInstaller --onefile bundle (see paths.py).
+app.py — AI Client Agent SaaS
+Multi-user web app with Supabase auth, profile setup, and agent runner.
 """
 
-import threading, queue, time, webbrowser, os
-from flask import Flask, render_template, request, jsonify, Response
+import threading, queue, time, os, json
+from flask import Flask, render_template, request, jsonify, Response, session, redirect
+from supabase import create_client, Client
+from functools import wraps
 
-import config_store
 import agent_core
-from license_manager import check_access
 from paths import get_resource_dir
 
 _resource_dir = get_resource_dir()
@@ -18,206 +17,224 @@ app = Flask(
     template_folder=os.path.join(_resource_dir, "templates"),
     static_folder=os.path.join(_resource_dir, "static"),
 )
+app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-change-me")
 
-# ── Shared state for the background run ──
-state = {
-    "running": False,
-    "log_queue": queue.Queue(),
-    "last_result": None,
-}
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL else None
 
+OWNER_GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "AIzaSyC7BszKyHwmYqIfletuTQszUA_J2fH9siE")
+TRIAL_DAYS = 5
 
-def log_to_queue(message):
-    state["log_queue"].put(str(message))
+_user_states = {}
 
+def get_user_state(uid):
+    if uid not in _user_states:
+        _user_states[uid] = {"running": False, "log_queue": queue.Queue(), "last_result": None}
+    return _user_states[uid]
 
-# ══════════════════════════════════════════════════════
-#  PAGES
-# ══════════════════════════════════════════════════════
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "user_id" not in session:
+            if request.path.startswith("/api/"):
+                return jsonify({"ok": False, "message": "Not logged in"}), 401
+            return redirect("/")
+        return f(*args, **kwargs)
+    return decorated
+
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("saas.html")
 
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    return render_template("dashboard.html")
 
-# ══════════════════════════════════════════════════════
-#  STATUS — profile, license, stats
-# ══════════════════════════════════════════════════════
-@app.route("/api/status")
-def api_status():
-    cfg = config_store.load_config()
-    profile_complete = config_store.is_profile_complete(cfg)
-
-    license_info = {"allowed": True, "message": "", "kind": "none"}
-    if profile_complete:
-        # check_access prints to stdout — capture nothing, just call verify directly
-        from license_manager import verify_license_key, get_trial_status
-        if cfg.get("LICENSE_KEY"):
-            valid, msg, days_left = verify_license_key(cfg["YOUR_EMAIL"], cfg["LICENSE_KEY"])
-            if valid:
-                license_info = {"allowed": True, "message": msg, "kind": "licensed", "days_left": days_left}
-            else:
-                trial_active, days_left, start = get_trial_status()
-                if trial_active:
-                    license_info = {"allowed": True, "message": f"License problem ({msg}). Using trial.",
-                                     "kind": "trial", "days_left": days_left}
-                else:
-                    license_info = {"allowed": False, "message": msg, "kind": "expired", "days_left": 0}
-        else:
-            trial_active, days_left, start = get_trial_status()
-            if trial_active:
-                license_info = {"allowed": True, "message": "Free trial active", "kind": "trial", "days_left": days_left}
-            else:
-                license_info = {"allowed": False, "message": "Trial expired", "kind": "expired", "days_left": 0}
-
-    stats = agent_core.get_stats()
-
-    return jsonify({
-        "profile_complete": profile_complete,
-        "config": {k: v for k, v in cfg.items() if k != "GOOGLE_MAPS_API_KEY"},
-        "license": license_info,
-        "stats": stats,
-        "running": state["running"],
-    })
-
-
-# ══════════════════════════════════════════════════════
-#  SAVE PROFILE
-# ══════════════════════════════════════════════════════
-@app.route("/api/config", methods=["POST"])
-def api_save_config():
+@app.route("/api/auth/signup", methods=["POST"])
+def api_signup():
     data = request.get_json()
-    # business types may come as comma-separated string
-    if isinstance(data.get("BUSINESS_TYPES"), str):
-        data["BUSINESS_TYPES"] = [b.strip() for b in data["BUSINESS_TYPES"].split(",") if b.strip()]
-    cfg = config_store.save_config(data)
-    return jsonify({"ok": True, "config": {k: v for k, v in cfg.items() if k != "GOOGLE_MAPS_API_KEY"}})
-
-
-# ══════════════════════════════════════════════════════
-#  RUN AGENT — background thread + streaming logs
-# ══════════════════════════════════════════════════════
-def _run_pipeline_thread(cfg):
+    email = data.get("email", "").strip()
+    password = data.get("password", "").strip()
+    full_name = data.get("full_name", "").strip()
+    if not email or not password:
+        return jsonify({"ok": False, "message": "Email and password required."})
     try:
-        result = agent_core.run_full_pipeline(cfg, log=log_to_queue)
-        state["last_result"] = result
+        res = supabase.auth.sign_up({"email": email, "password": password})
+        user = res.user
+        if not user:
+            return jsonify({"ok": False, "message": "Signup failed. Try again."})
+        supabase.table("profiles").insert({"id": user.id, "full_name": full_name, "gmail": email}).execute()
+        session["user_id"] = user.id
+        session["user_email"] = email
+        return jsonify({"ok": True, "redirect": "/dashboard"})
     except Exception as e:
-        log_to_queue(f"❌ Unexpected error: {e}")
-    finally:
-        log_to_queue("__DONE__")
-        state["running"] = False
+        return jsonify({"ok": False, "message": str(e)})
 
+@app.route("/api/auth/login", methods=["POST"])
+def api_login():
+    data = request.get_json()
+    email = data.get("email", "").strip()
+    password = data.get("password", "").strip()
+    try:
+        res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        user = res.user
+        if not user:
+            return jsonify({"ok": False, "message": "Invalid email or password."})
+        session["user_id"] = user.id
+        session["user_email"] = email
+        return jsonify({"ok": True, "redirect": "/dashboard"})
+    except Exception as e:
+        return jsonify({"ok": False, "message": "Invalid email or password."})
+
+@app.route("/api/auth/logout", methods=["POST"])
+def api_logout():
+    session.clear()
+    return jsonify({"ok": True, "redirect": "/"})
+
+@app.route("/api/profile", methods=["GET"])
+@login_required
+def api_get_profile():
+    uid = session["user_id"]
+    try:
+        res = supabase.table("profiles").select("*").eq("id", uid).single().execute()
+        profile = res.data or {}
+        from datetime import datetime
+        trial_start = profile.get("trial_start")
+        if trial_start:
+            start = datetime.fromisoformat(trial_start.replace("Z", "+00:00"))
+            days_used = (datetime.now(start.tzinfo) - start).days
+            days_left = max(TRIAL_DAYS - days_used, 0)
+        else:
+            days_left = TRIAL_DAYS
+        profile["days_left"] = days_left
+        profile["trial_active"] = days_left > 0
+        profile["is_paid"] = profile.get("is_paid", False)
+        profile.pop("gmail_app_password", None)
+        return jsonify({"ok": True, "profile": profile})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+
+@app.route("/api/profile", methods=["POST"])
+@login_required
+def api_save_profile():
+    uid = session["user_id"]
+    data = request.get_json()
+    allowed = ["full_name", "business_name", "gmail", "gmail_app_password",
+               "your_service", "your_about", "target_city", "business_types"]
+    update = {k: v for k, v in data.items() if k in allowed}
+    try:
+        supabase.table("profiles").update(update).eq("id", uid).execute()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+
+@app.route("/api/status")
+@login_required
+def api_status():
+    uid = session["user_id"]
+    state = get_user_state(uid)
+    try:
+        res = supabase.table("profiles").select("*").eq("id", uid).single().execute()
+        profile = res.data or {}
+        from datetime import datetime
+        trial_start = profile.get("trial_start")
+        if trial_start:
+            start = datetime.fromisoformat(trial_start.replace("Z", "+00:00"))
+            days_used = (datetime.now(start.tzinfo) - start).days
+            days_left = max(TRIAL_DAYS - days_used, 0)
+        else:
+            days_left = TRIAL_DAYS
+        required = ["full_name", "gmail", "gmail_app_password", "your_service", "your_about", "target_city"]
+        profile_complete = all(profile.get(k, "").strip() for k in required)
+        return jsonify({
+            "ok": True,
+            "profile_complete": profile_complete,
+            "days_left": days_left,
+            "is_paid": profile.get("is_paid", False),
+            "running": state["running"],
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+
+def _build_config(profile):
+    business_types = profile.get("business_types") or ["small business","shop","store","restaurant","hotel","clinic","school","agency","company"]
+    if isinstance(business_types, str):
+        business_types = [b.strip() for b in business_types.split(",") if b.strip()]
+    return {
+        "YOUR_EMAIL": profile.get("gmail", ""),
+        "YOUR_NAME": profile.get("full_name", ""),
+        "YOUR_SERVICE": profile.get("your_service", ""),
+        "YOUR_ABOUT": profile.get("your_about", ""),
+        "TARGET_CITY": profile.get("target_city", ""),
+        "BUSINESS_TYPES": business_types,
+        "GMAIL_ADDRESS": profile.get("gmail", ""),
+        "GMAIL_APP_PASSWORD": profile.get("gmail_app_password", ""),
+        "GOOGLE_MAPS_API_KEY": OWNER_GOOGLE_MAPS_API_KEY,
+        "MAX_RESULTS_PER_QUERY": 20,
+        "DELAY_BETWEEN_EMAILS": 30,
+        "ATTACHMENT_PATH": "",
+        "ATTACHMENT_NAME": "",
+        "LICENSE_KEY": "",
+    }
 
 @app.route("/api/run", methods=["POST"])
+@login_required
 def api_run():
+    uid = session["user_id"]
+    state = get_user_state(uid)
     if state["running"]:
         return jsonify({"ok": False, "message": "Agent is already running."})
-
-    cfg = config_store.load_config()
-    if not config_store.is_profile_complete(cfg):
-        return jsonify({"ok": False, "message": "Please complete your profile in Setup first."})
-
-    # License check
-    allowed, msg = check_access(cfg["YOUR_EMAIL"], cfg.get("LICENSE_KEY", ""))
-    if not allowed:
-        return jsonify({"ok": False, "message": "Your free trial has ended. See Billing tab to continue."})
-
-    state["running"] = True
-    state["log_queue"] = queue.Queue()
-    t = threading.Thread(target=_run_pipeline_thread, args=(cfg,), daemon=True)
-    t.start()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/check-replies", methods=["POST"])
-def api_check_replies():
-    if state["running"]:
-        return jsonify({"ok": False, "message": "Agent is already running."})
-
-    cfg = config_store.load_config()
-    if not config_store.is_profile_complete(cfg):
-        return jsonify({"ok": False, "message": "Please complete your profile in Setup first."})
-
-    allowed, msg = check_access(cfg["YOUR_EMAIL"], cfg.get("LICENSE_KEY", ""))
-    if not allowed:
-        return jsonify({"ok": False, "message": "Your free trial has ended. See Billing tab to continue."})
-
+    res = supabase.table("profiles").select("*").eq("id", uid).single().execute()
+    profile = res.data or {}
+    from datetime import datetime
+    trial_start = profile.get("trial_start")
+    if trial_start:
+        start = datetime.fromisoformat(trial_start.replace("Z", "+00:00"))
+        days_used = (datetime.now(start.tzinfo) - start).days
+        days_left = max(TRIAL_DAYS - days_used, 0)
+    else:
+        days_left = TRIAL_DAYS
+    if days_left <= 0 and not profile.get("is_paid"):
+        return jsonify({"ok": False, "message": "Your free trial has ended. Please upgrade to continue."})
+    cfg = _build_config(profile)
     def _run():
+        def log(msg):
+            state["log_queue"].put(str(msg))
         try:
-            agent_core.check_replies(cfg, log=log_to_queue)
+            result = agent_core.run_full_pipeline(cfg, log=log)
+            state["last_result"] = result
         except Exception as e:
-            log_to_queue(f"❌ Unexpected error: {e}")
+            log(f"❌ Unexpected error: {e}")
         finally:
-            log_to_queue("__DONE__")
+            log("__DONE__")
             state["running"] = False
-
     state["running"] = True
     state["log_queue"] = queue.Queue()
     t = threading.Thread(target=_run, daemon=True)
     t.start()
     return jsonify({"ok": True})
 
-
-# ══════════════════════════════════════════════════════
-#  LOG STREAM — Server-Sent Events
-# ══════════════════════════════════════════════════════
 @app.route("/api/stream")
+@login_required
 def api_stream():
+    uid = session["user_id"]
+    state = get_user_state(uid)
     def event_stream():
         q = state["log_queue"]
         while True:
             try:
                 line = q.get(timeout=30)
             except queue.Empty:
-                yield "data: \n\n"  # keepalive
+                yield "data: \n\n"
                 continue
             if line == "__DONE__":
                 yield "event: done\ndata: done\n\n"
                 break
             yield f"data: {line}\n\n"
-
     return Response(event_stream(), mimetype="text/event-stream")
 
-
-# ══════════════════════════════════════════════════════
-#  MAIN
-# ══════════════════════════════════════════════════════
-def _find_free_port(start=5000, tries=20):
-    import socket
-    for p in range(start, start + tries):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            if s.connect_ex(("127.0.0.1", p)) != 0:
-                return p
-    return start
-
-
 if __name__ == "__main__":
-    port = _find_free_port(5000)
-    url = f"http://127.0.0.1:{port}"
-
-    print("\n" + "═" * 55)
-    print("  🤖  AI CLIENT AGENT — Dashboard")
-    print("═" * 55)
-    print(f"\n  Starting up... your browser will open automatically.")
-    print(f"  If it doesn't, open this address manually:")
-    print(f"\n      {url}\n")
-    print("  Keep this window open while you use the app.")
-    print("  Close this window to stop the agent.\n")
-
-    def open_browser():
-        try:
-            webbrowser.open(url)
-        except Exception:
-            pass
-        try:
-            import subprocess, sys
-            if sys.platform.startswith("linux"):
-                subprocess.Popen(["xdg-open", url],
-                                 stdout=subprocess.DEVNULL,
-                                 stderr=subprocess.DEVNULL)
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", url])
-        except Exception:
-            pass
-
-    threading.Timer(1.2, open_browser).start()
-    app.run(host="127.0.0.1", port=port, debug=False)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)

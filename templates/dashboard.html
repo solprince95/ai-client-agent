@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — AI Client Agent</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f0f4ff; color: #1a1a2e; min-height: 100vh; }
+  nav { background: #1a56db; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; }
+  .logo { font-size: 1.1rem; font-weight: 700; color: #fff; }
+  .nav-right { display: flex; align-items: center; gap: 1rem; }
+  .trial-badge { background: rgba(255,255,255,0.2); color: #fff; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.82rem; font-weight: 600; }
+  .logout-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 0.4rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+  .container { max-width: 900px; margin: 0 auto; padding: 2rem 1rem; }
+  .tabs { display: flex; gap: 0.5rem; margin-bottom: 2rem; background: #fff; padding: 0.4rem; border-radius: 10px; border: 1px solid #dde3ff; }
+  .tab { flex: 1; padding: 0.6rem; text-align: center; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 600; color: #888; border: none; background: none; }
+  .tab.active { background: #1a56db; color: #fff; }
+  .card { background: #fff; border-radius: 14px; padding: 1.5rem; margin-bottom: 1.5rem; border: 1px solid #dde3ff; }
+  .card h3 { font-size: 1.1rem; margin-bottom: 1rem; color: #1a1a2e; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+  .form-group.full { grid-column: 1 / -1; }
+  label { font-size: 0.85rem; font-weight: 600; color: #555; }
+  input, textarea { padding: 0.7rem 0.9rem; border: 1.5px solid #dde3ff; border-radius: 8px; font-size: 0.9rem; outline: none; font-family: inherit; }
+  input:focus, textarea:focus { border-color: #1a56db; }
+  textarea { resize: vertical; min-height: 80px; }
+  .save-btn { background: #1a56db; color: #fff; border: none; padding: 0.75rem 2rem; border-radius: 8px; font-size: 0.95rem; font-weight: 700; cursor: pointer; }
+  .save-msg { font-size: 0.85rem; color: #27ae60; margin-left: 1rem; display: none; }
+  .run-section { text-align: center; padding: 1rem 0; }
+  .run-btn { background: #1a56db; color: #fff; border: none; padding: 1rem 3rem; border-radius: 12px; font-size: 1.1rem; font-weight: 700; cursor: pointer; }
+  .run-btn:disabled { background: #aaa; cursor: not-allowed; }
+  .run-note { color: #888; font-size: 0.85rem; margin-top: 0.75rem; }
+  #log-box { background: #0d1b2a; color: #a8d8a8; font-family: monospace; font-size: 0.82rem; padding: 1rem; border-radius: 10px; min-height: 200px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; line-height: 1.6; display: none; margin-top: 1rem; }
+  .billing-card { background: #f0f4ff; border-radius: 12px; padding: 1.5rem; border: 2px solid #1a56db; text-align: center; }
+  .billing-price { font-size: 2.5rem; font-weight: 800; color: #1a56db; }
+  .billing-price span { font-size: 1rem; font-weight: 400; color: #888; }
+  .upi-btn { display: inline-block; background: #1a56db; color: #fff; padding: 0.85rem 2rem; border-radius: 10px; font-weight: 700; font-size: 1rem; border: none; cursor: pointer; margin-top: 1rem; }
+  .upi-id { background: #fff; border: 1.5px dashed #1a56db; border-radius: 8px; padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 700; color: #1a56db; margin: 1rem auto; display: inline-block; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<nav>
+  <div class="logo">🤖 AI Client Agent</div>
+  <div class="nav-right">
+    <span class="trial-badge" id="trial-badge">⏳ 5 days left</span>
+    <button class="logout-btn" onclick="logout()">Sign Out</button>
+  </div>
+</nav>
+<div class="container">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('run')">🚀 Run Agent</button>
+    <button class="tab" onclick="switchTab('setup')">⚙️ Setup</button>
+    <button class="tab" onclick="switchTab('billing')">💳 Billing</button>
+  </div>
+  <div class="tab-content active" id="tab-run">
+    <div class="card">
+      <h3>Agent Status</h3>
+      <p id="status-msg" style="color:#555;margin-bottom:1rem;font-size:0.9rem;">Loading...</p>
+      <div class="run-section">
+        <button class="run-btn" id="run-btn" onclick="runAgent()" disabled>▶ Run Agent</button>
+        <p class="run-note" id="run-note">Complete your profile in Setup first.</p>
+      </div>
+      <div id="log-box"></div>
+    </div>
+  </div>
+  <div class="tab-content" id="tab-setup">
+    <div class="card">
+      <h3>Your Profile</h3>
+      <div class="form-row">
+        <div class="form-group"><label>Full Name</label><input type="text" id="full_name" placeholder="Your name"/></div>
+        <div class="form-group"><label>Business / Brand Name</label><input type="text" id="business_name" placeholder="Optional"/></div>
+        <div class="form-group"><label>Your Service</label><input type="text" id="your_service" placeholder="e.g. Website Design, Photography"/></div>
+        <div class="form-group"><label>Target City</label><input type="text" id="target_city" placeholder="e.g. Surat, Ahmedabad"/></div>
+        <div class="form-group full"><label>About You / Your Pitch</label><textarea id="your_about" placeholder="Brief description of your service..."></textarea></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Gmail Settings</h3>
+      <p style="font-size:0.85rem;color:#888;margin-bottom:1rem;">We use your Gmail to send outreach emails on your behalf.</p>
+      <div class="form-row">
+        <div class="form-group"><label>Gmail Address</label><input type="email" id="gmail" placeholder="your@gmail.com"/></div>
+        <div class="form-group"><label>Gmail App Password</label><input type="password" id="gmail_app_password" placeholder="16-character app password"/></div>
+      </div>
+      <p style="font-size:0.8rem;color:#888;">Get App Password: <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:#1a56db;">myaccount.google.com/apppasswords</a></p>
+    </div>
+    <div style="display:flex;align-items:center;">
+      <button class="save-btn" onclick="saveProfile()">Save Profile</button>
+      <span class="save-msg" id="save-msg">✅ Saved!</span>
+    </div>
+  </div>
+  <div class="tab-content" id="tab-billing">
+    <div class="card">
+      <h3>Your Plan</h3>
+      <div class="billing-card">
+        <div class="billing-price">₹999 <span>/ month</span></div>
+        <p style="color:#555;margin:0.75rem 0;font-size:0.95rem;">Unlimited campaigns · All features included</p>
+        <div id="billing-status"></div>
+        <div id="pay-section" style="display:none;">
+          <p style="color:#555;font-size:0.9rem;margin-top:1rem;">Pay via UPI to continue after trial:</p>
+          <div class="upi-id">📱 prince@upi</div><br>
+          <button class="upi-btn" onclick="window.open('upi://pay?pa=prince@upi&pn=AIClientAgent&am=999&cu=INR','_blank')">Pay ₹999 via UPI</button>
+          <p style="font-size:0.82rem;color:#888;margin-top:0.75rem;">After payment, WhatsApp your screenshot to get activated.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+function switchTab(tab) {
+  const tabs = ['run','setup','billing'];
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', tabs[i]===tab));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+}
+async function loadProfile() {
+  const res = await fetch('/api/profile');
+  const data = await res.json();
+  if (!data.ok) return;
+  const p = data.profile;
+  document.getElementById('full_name').value = p.full_name||'';
+  document.getElementById('business_name').value = p.business_name||'';
+  document.getElementById('your_service').value = p.your_service||'';
+  document.getElementById('your_about').value = p.your_about||'';
+  document.getElementById('target_city').value = p.target_city||'';
+  document.getElementById('gmail').value = p.gmail||'';
+  const days = p.days_left;
+  const badge = document.getElementById('trial-badge');
+  if (p.is_paid) { badge.textContent='✅ Active'; badge.style.background='rgba(39,174,96,0.3)'; }
+  else if (days>0) { badge.textContent=`⏳ ${days} day${days===1?'':'s'} left`; }
+  else { badge.textContent='⛔ Trial ended'; badge.style.background='rgba(231,76,60,0.3)'; }
+  const billStatus = document.getElementById('billing-status');
+  const paySection = document.getElementById('pay-section');
+  if (p.is_paid) { billStatus.innerHTML='<p style="color:#27ae60;font-weight:700;">✅ Active Subscriber</p>'; }
+  else if (days>0) { billStatus.innerHTML=`<p style="color:#1a56db;font-weight:600;">🎁 Free Trial — ${days} day${days===1?'':'s'} remaining</p>`; paySection.style.display='block'; }
+  else { billStatus.innerHTML='<p style="color:#e74c3c;font-weight:700;">⛔ Trial Ended — Please pay to continue</p>'; paySection.style.display='block'; }
+}
+async function loadStatus() {
+  const res = await fetch('/api/status');
+  const data = await res.json();
+  if (!data.ok) return;
+  const btn = document.getElementById('run-btn');
+  const note = document.getElementById('run-note');
+  const msg = document.getElementById('status-msg');
+  if (!data.profile_complete) { msg.textContent='⚠️ Profile incomplete — go to Setup tab.'; note.textContent='Complete your profile in Setup first.'; btn.disabled=true; }
+  else if (!data.is_paid && data.days_left<=0) { msg.textContent='⛔ Trial ended — upgrade in Billing tab.'; btn.disabled=true; }
+  else if (data.running) { msg.textContent='⏳ Agent is running...'; btn.disabled=true; btn.textContent='⏳ Running...'; }
+  else { msg.textContent='✅ Ready to run.'; btn.disabled=false; btn.textContent='▶ Run Agent'; note.textContent=`${data.days_left} trial day${data.days_left===1?'':'s'} remaining.`; }
+}
+async function saveProfile() {
+  const data = { full_name:document.getElementById('full_name').value, business_name:document.getElementById('business_name').value, your_service:document.getElementById('your_service').value, your_about:document.getElementById('your_about').value, target_city:document.getElementById('target_city').value, gmail:document.getElementById('gmail').value, gmail_app_password:document.getElementById('gmail_app_password').value };
+  const res = await fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  const result = await res.json();
+  if (result.ok) { const msg=document.getElementById('save-msg'); msg.style.display='inline'; setTimeout(()=>msg.style.display='none',2500); loadStatus(); }
+}
+async function runAgent() {
+  const btn = document.getElementById('run-btn');
+  const logBox = document.getElementById('log-box');
+  btn.disabled=true; btn.textContent='⏳ Starting...';
+  logBox.style.display='block'; logBox.textContent='';
+  const res = await fetch('/api/run',{method:'POST'});
+  const data = await res.json();
+  if (!data.ok) { logBox.textContent='❌ '+data.message; btn.disabled=false; btn.textContent='▶ Run Agent'; return; }
+  const evtSource = new EventSource('/api/stream');
+  evtSource.onmessage = (e) => { if(e.data){logBox.textContent+=e.data+'\n'; logBox.scrollTop=logBox.scrollHeight;} };
+  evtSource.addEventListener('done',()=>{ evtSource.close(); btn.disabled=false; btn.textContent='▶ Run Agent'; loadStatus(); });
+}
+async function logout() { await fetch('/api/auth/logout',{method:'POST'}); window.location.href='/'; }
+loadProfile(); loadStatus(); setInterval(loadStatus,10000);
+</script>
+</body>
+</html>
