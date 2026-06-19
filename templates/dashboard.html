@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard — AI Client Agent</title>
+<title>Dashboard: AI Client Agent</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: 'Segoe UI', sans-serif; background: #f0f4ff; color: #1a1a2e; min-height: 100vh; }
@@ -136,8 +136,8 @@ async function loadProfile() {
   const billStatus = document.getElementById('billing-status');
   const paySection = document.getElementById('pay-section');
   if (p.is_paid) { billStatus.innerHTML='<p style="color:#27ae60;font-weight:700;">✅ Active Subscriber</p>'; }
-  else if (days>0) { billStatus.innerHTML=`<p style="color:#1a56db;font-weight:600;">🎁 Free Trial — ${days} day${days===1?'':'s'} remaining</p>`; paySection.style.display='block'; }
-  else { billStatus.innerHTML='<p style="color:#e74c3c;font-weight:700;">⛔ Trial Ended — Please pay to continue</p>'; paySection.style.display='block'; }
+  else if (days>0) { billStatus.innerHTML=`<p style="color:#1a56db;font-weight:600;">🎁 Free Trial. ${days} day${days===1?'':'s'} remaining</p>`; paySection.style.display='block'; }
+  else { billStatus.innerHTML='<p style="color:#e74c3c;font-weight:700;">⛔ Trial Ended. Please pay to continue</p>'; paySection.style.display='block'; }
 }
 async function loadStatus() {
   const res = await fetch('/api/status');
@@ -147,7 +147,7 @@ async function loadStatus() {
   const note = document.getElementById('run-note');
   const msg = document.getElementById('status-msg');
   if (!data.profile_complete) { msg.textContent='⚠️ Profile incomplete — go to Setup tab.'; note.textContent='Complete your profile in Setup first.'; btn.disabled=true; }
-  else if (!data.is_paid && data.days_left<=0) { msg.textContent='⛔ Trial ended — upgrade in Billing tab.'; btn.disabled=true; }
+  else if (!data.is_paid && data.days_left<=0) { msg.textContent='⛔ Trial ended. Upgrade in Billing tab.'; btn.disabled=true; }
   else if (data.running) { msg.textContent='⏳ Agent is running...'; btn.disabled=true; btn.textContent='⏳ Running...'; }
   else { msg.textContent='✅ Ready to run.'; btn.disabled=false; btn.textContent='▶ Run Agent'; note.textContent=`${data.days_left} trial day${data.days_left===1?'':'s'} remaining.`; }
 }
