@@ -85,8 +85,8 @@
 <nav>
   <div class="logo">🤖 AI Client Agent</div>
   <div class="nav-btns">
-    <button class="btn-ghost" onclick="showAuth('login')"><span class="en">Sign In</span><span class="hi">लॉगिन</span></button>
-    <button class="btn-solid" onclick="showAuth('signup')"><span class="en">Start Free Trial</span><span class="hi">फ्री ट्रायल</span></button>
+    <button class="btn-ghost" onclick="showAuth('login')">Sign In</button>
+    <button class="btn-solid" onclick="showAuth('signup')">Start Free Trial</button>
   </div>
 </nav>
 <div class="hero">
@@ -97,53 +97,40 @@
   <p class="en">AI Client Agent finds businesses on Google Maps, visits their websites, extracts emails, and sends personalized outreach — all on autopilot.</p>
   <p class="hi">AI Client Agent Google Maps पर बिज़नेस ढूंढता है, ईमेल निकालता है, और खुद ब खुद ईमेल भेजता है।</p>
   <div class="hero-btns">
-    <button class="btn-hero btn-primary" onclick="showAuth('signup')"><span class="en">Start Free Trial</span><span class="hi">मुफ्त शुरू करें</span></button>
-    <button class="btn-hero btn-secondary" onclick="showAuth('login')"><span class="en">Sign In</span><span class="hi">लॉगिन करें</span></button>
+    <button class="btn-hero btn-primary" onclick="showAuth('signup')">Start Free Trial</button>
+    <button class="btn-hero btn-secondary" onclick="showAuth('login')">Sign In</button>
   </div>
 </div>
 <div class="section">
-  <h2><span class="en">How It Works</span><span class="hi">कैसे काम करता है</span></h2>
-  <p class="sub"><span class="en">4 simple steps — fully automated</span><span class="hi">4 आसान कदम — पूरी तरह स्वचालित</span></p>
+  <h2>How It Works</h2>
+  <p class="sub">4 simple steps — fully automated</p>
   <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-icon">📝</div><h3><span class="en">Set Up Profile</span><span class="hi">प्रोफाइल बनाएं</span></h3><p><span class="en">Enter your name, service, city and Gmail.</span><span class="hi">नाम, सेवा, शहर और Gmail डालें।</span></p></div>
-    <div class="step"><div class="step-num">2</div><div class="step-icon">🗺️</div><h3><span class="en">Find Businesses</span><span class="hi">बिज़नेस खोजें</span></h3><p><span class="en">Agent searches Google Maps for potential clients.</span><span class="hi">एजेंट Google Maps पर क्लाइंट खोजता है।</span></p></div>
-    <div class="step"><div class="step-num">3</div><div class="step-icon">📧</div><h3><span class="en">Send Emails</span><span class="hi">ईमेल भेजें</span></h3><p><span class="en">Personalized emails sent automatically.</span><span class="hi">हर बिज़नेस को खुद ब खुद ईमेल।</span></p></div>
-    <div class="step"><div class="step-num">4</div><div class="step-icon">💰</div><h3><span class="en">Get Clients</span><span class="hi">क्लाइंट पाएं</span></h3><p><span class="en">Wait for replies and close deals.</span><span class="hi">जवाब का इंतजार करें।</span></p></div>
+    <div class="step"><div class="step-num">1</div><div class="step-icon">📝</div><h3>Set Up Profile</h3><p>Enter your name, service, city and Gmail.</p></div>
+    <div class="step"><div class="step-num">2</div><div class="step-icon">🗺️</div><h3>Find Businesses</h3><p>Agent searches Google Maps for potential clients.</p></div>
+    <div class="step"><div class="step-num">3</div><div class="step-icon">📧</div><h3>Send Emails</h3><p>Personalized emails sent automatically.</p></div>
+    <div class="step"><div class="step-num">4</div><div class="step-icon">💰</div><h3>Get Clients</h3><p>Wait for replies and close deals.</p></div>
   </div>
 </div>
 <div class="pricing">
   <div class="pricing-inner">
-    <h2><span class="en">Simple Pricing</span><span class="hi">सरल मूल्य</span></h2>
+    <h2>Simple Pricing</h2>
     <div class="price-card">
       <div class="price-tag">₹999 <span>/ month</span></div>
       <ul class="features">
-        <li><span class="en">Unlimited email campaigns</span><span class="hi">असीमित ईमेल कैंपेन</span></li>
-        <li><span class="en">Google Maps business search</span><span class="hi">Google Maps बिज़नेस खोज</span></li>
-        <li><span class="en">Auto email extraction</span><span class="hi">ऑटो ईमेल खोज</span></li>
-        <li><span class="en">Personalized email sending</span><span class="hi">पर्सनलाइज़्ड ईमेल</span></li>
-        <li><span class="en">UPI & Card payment</span><span class="hi">UPI और कार्ड भुगतान</span></li>
+        <li>Unlimited email campaigns</li>
+        <li>Google Maps business search</li>
+        <li>Auto email extraction</li>
+        <li>Personalized email sending</li>
+        <li>UPI & Card payment</li>
       </ul>
-      <button class="auth-submit" onclick="showAuth('signup')"><span class="en">Start 5-Day Free Trial</span><span class="hi">5 दिन मुफ्त शुरू करें</span></button>
-      <p class="trial-note"><span class="en">No credit card required</span><span class="hi">कार्ड की जरूरत नहीं</span></p>
+      <button class="auth-submit" onclick="showAuth('signup')">Start 5-Day Free Trial</button>
+      <p class="trial-note">No credit card required</p>
     </div>
   </div>
 </div>
 <footer><p>© 2025 AI Client Agent · Made with ❤️ in India</p></footer>
 <script>
 let isLogin = false;
-function setLang(lang) {
-  document.getElementById('lang-overlay').style.display = 'none';
-  localStorage.setItem('lang', lang);
-  applyLang(lang);
-}
-function applyLang(lang) {
-  document.querySelectorAll('.en').forEach(el => el.style.display = lang==='en'?'':'none');
-  document.querySelectorAll('.hi').forEach(el => el.style.display = lang==='hi'?'':'none');
-}
-window.onload = () => {
-  const saved = localStorage.getItem('lang');
-  if (saved) { document.getElementById('lang-overlay').style.display='none'; applyLang(saved); }
-};
 function showAuth(mode) {
   isLogin = mode==='login';
   document.getElementById('auth-overlay').classList.add('show');
