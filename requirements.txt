@@ -6,4 +6,3 @@ cryptography
 gunicorn
 gevent
 pyinstaller
-supabase==2.10.0
