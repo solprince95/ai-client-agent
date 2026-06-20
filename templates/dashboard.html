@@ -44,7 +44,7 @@
 </head>
 <body>
 <nav>
-  <div class="logo"> AI Client Agent</div>
+  <div class="logo">🤖 AI Client Agent</div>
   <div class="nav-right">
     <span class="trial-badge" id="trial-badge">⏳ 5 days trial</span>
     <button class="logout-btn" onclick="logout()">Sign Out</button>
@@ -128,13 +128,15 @@ async function loadProfile() {
   document.getElementById('your_about').value = p.your_about||'';
   document.getElementById('target_city').value = p.target_city||'';
   document.getElementById('gmail').value = p.gmail||'';
+  const days = p.days_left;
   const badge = document.getElementById('trial-badge');
   if (p.is_paid) { badge.textContent='✅ Active'; badge.style.background='rgba(39,174,96,0.3)'; }
+  else if (days>0) { badge.textContent=`⏳ ${days} day${days===1?'':'s'} left`; }
   else { badge.textContent='⛔ Trial ended'; badge.style.background='rgba(231,76,60,0.3)'; }
   const billStatus = document.getElementById('billing-status');
   const paySection = document.getElementById('pay-section');
   if (p.is_paid) { billStatus.innerHTML='<p style="color:#27ae60;font-weight:700;">✅ Active Subscriber</p>'; }
-  else if (days>0) { billStatus.innerHTML=`<p style="color:#1a56db;font-weight:600;">🎁 Free Trial ; paySection.style.display='block'; }
+  else if (days>0) { billStatus.innerHTML=`<p style="color:#1a56db;font-weight:600;">🎁 Free Trial. ${days} day${days===1?'':'s'} remaining</p>`; paySection.style.display='block'; }
   else { billStatus.innerHTML='<p style="color:#e74c3c;font-weight:700;">⛔ Trial Ended. Please pay to continue</p>'; paySection.style.display='block'; }
 }
 async function loadStatus() {
