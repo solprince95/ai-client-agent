@@ -209,19 +209,9 @@ async function runAgent() {
   const res = await fetch('/api/run',{method:'POST'});
   const data = await res.json();
   if (!data.ok) { logBox.textContent='❌ '+data.message; btn.disabled=false; btn.textContent='▶ Run Agent'; return; }
-  startStatusPolling();
   const evtSource = new EventSource('/api/stream');
-  evtSource.onmessage = (e) => {
-    if(e.data){logBox.textContent+=e.data+'\n'; logBox.scrollTop=logBox.scrollHeight;}
-    btn.disabled=true; btn.textContent='⏳ Running...';
-  };
-  evtSource.addEventListener('done',()=>{
-    evtSource.close();
-    btn.disabled=false;
-    btn.textContent='▶ Run Agent';
-    stopStatusPolling();
-    loadStatus();
-  });
+  evtSource.onmessage = (e) => { if(e.data){logBox.textContent+=e.data+'\n'; logBox.scrollTop=logBox.scrollHeight;} };
+  evtSource.addEventListener('done',()=>{ evtSource.close(); btn.disabled=false; btn.textContent='▶ Run Agent'; loadStatus(); });
 }
 async function logout() { await fetch('/api/auth/logout',{method:'POST'}); window.location.href='/'; }
 loadProfile(); loadStatus(); setInterval(loadStatus,10000);
