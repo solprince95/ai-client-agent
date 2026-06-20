@@ -93,7 +93,7 @@ def _profile_schema_error(error):
     return "Database setup incomplete: profiles table is missing required columns. Run supabase_profiles_schema.sql in Supabase SQL Editor, then retry."
 
 def _require_supabase():
-    if not supabase:
+    if not SUPABASE_URL or not SUPABASE_KEY:
         return jsonify({"ok": False, "message": "Supabase is not configured. Set SUPABASE_URL and SUPABASE_KEY."}), 500
     return None
 
