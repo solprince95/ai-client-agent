@@ -27,21 +27,21 @@ def sb_signup(email, password):
     r = http_requests.post(
         f"{SUPABASE_URL}/auth/v1/signup",
         json={"email": email, "password": password},
-        headers=_sb_headers(), timeout=15)
+        headers=_sb_headers(), timeout=15, verify=False)
     return r.status_code, r.json()
 
 def sb_login(email, password):
     r = http_requests.post(
         f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
         json={"email": email, "password": password},
-        headers=_sb_headers(), timeout=15)
+        headers=_sb_headers(), timeout=15, verify=False)
     return r.status_code, r.json()
 
 def sb_get_profile(uid):
     r = http_requests.get(
         f"{SUPABASE_URL}/rest/v1/profiles",
         params={"id": f"eq.{uid}", "select": "*"},
-        headers=_sb_headers(), timeout=15)
+        headers=_sb_headers(), timeout=15, verify=False)
     data = r.json()
     return data[0] if data else None
 
@@ -52,7 +52,7 @@ def sb_insert_profile(uid, email, full_name=""):
         json={"id": uid, "gmail": email, "full_name": full_name,
               "trial_start": datetime.now(timezone.utc).isoformat()},
         headers={**_sb_headers(), "Prefer": "return=minimal"},
-        timeout=15)
+        timeout=15, verify=False)
 
 def sb_update_profile(uid, data):
     http_requests.patch(
@@ -60,7 +60,7 @@ def sb_update_profile(uid, data):
         params={"id": f"eq.{uid}"},
         json=data,
         headers={**_sb_headers(), "Prefer": "return=minimal"},
-        timeout=15)
+        timeout=15, verify=False)
 OWNER_GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "AIzaSyC7BszKyHwmYqIfletuTQszUA_J2fH9siE")
 TRIAL_DAYS = 5
 _user_states = {}
