@@ -192,7 +192,8 @@ def api_signup():
             return jsonify({"ok": True, "redirect": "/dashboard"})
         return jsonify({"ok": True, "confirm": True, "message": "Check your email. After confirming your account, click Sign In."})
     except Exception as e:
-        return jsonify({"ok": False, "message": _auth_error_message(e)})
+        import traceback
+        return jsonify({"ok": False, "message": _auth_error_message(e), "trace": traceback.format_exc()})
 
 @app.route("/api/auth/login", methods=["POST"])
 def api_login():
