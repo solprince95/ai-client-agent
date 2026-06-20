@@ -16,13 +16,14 @@ supabase = None  # Using direct HTTP instead
 
 class SupabaseHTTP:
     def __init__(self, url, key):
-        self.url = url.rstrip("/")
-        self.key = key
-        self.headers = {
+        object.__setattr__(self, 'url', url.rstrip("/"))
+        object.__setattr__(self, 'key', key)
+        object.__setattr__(self, 'headers', {
             "apikey": key,
             "Authorization": f"Bearer {key}",
             "Content-Type": "application/json",
-        }
+        })
+        object.__setattr__(self, 'auth', SupabaseHTTP._Auth(self))
 
     def _auth_headers(self, token=None):
         h = self.headers.copy()
