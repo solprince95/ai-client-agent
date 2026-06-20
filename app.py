@@ -124,9 +124,6 @@ class SupabaseHTTP:
                 raise Exception(str(res.data))
             return res
 
-    def __init_auth(self):
-        self.auth = self._Auth(self)
-
     def table(self, name):
         return self._Table(self, name)
 
