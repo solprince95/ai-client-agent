@@ -108,6 +108,13 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
+
+@app.route("/debug")
+def debug():
+    import sys
+    import supabase
+    return jsonify({"python": sys.version, "supabase": supabase.__version__})
+
 @app.route("/")
 def index():
     return render_template("saas.html")
