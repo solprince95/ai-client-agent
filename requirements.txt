@@ -1,7 +1,9 @@
 flask
-httpx
+requests
+urllib3==1.26.18
 beautifulsoup4
 cryptography
 gunicorn
 gevent
 pyinstaller
+supabase==2.10.0
