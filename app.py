@@ -240,7 +240,8 @@ def api_get_profile():
         profile.pop("gmail_app_password", None)
         return jsonify({"ok": True, "profile": profile})
     except Exception as e:
-        return jsonify({"ok": False, "message": _profile_schema_error(e) or str(e)})
+        import traceback
+        return jsonify({"ok": False, "message": _profile_schema_error(e) or str(e), "trace": traceback.format_exc()})
 
 @app.route("/api/profile", methods=["POST"])
 @login_required
