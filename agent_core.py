@@ -151,7 +151,7 @@ def fetch_websites(businesses, config, log=_noop):
                 with_sites.append(biz)
         except Exception:
             pass
-        if i % 10 == 0 or i == len(businesses):
+        if i % 5 == 0 or i == len(businesses):
             log(f"  Checked {i}/{len(businesses)} — {len(with_sites)} have websites so far")
         time.sleep(0.5)
     log(f"{len(with_sites)} of {len(businesses)} businesses have a website.")
@@ -199,7 +199,7 @@ def find_emails(businesses, log=_noop):
         if em:
             biz["email"] = em
             with_emails.append(biz)
-        if i % 5 == 0 or i == len(businesses):
+        if i % 3 == 0 or i == len(businesses):
             log(f"  Checked {i}/{len(businesses)} — {len(with_emails)} emails found so far")
         time.sleep(0.8)
     log(f"{len(with_emails)} businesses with usable email addresses.")
