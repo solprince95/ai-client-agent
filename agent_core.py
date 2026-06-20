@@ -111,7 +111,7 @@ def search_businesses(config, log=_noop):
                                     "address": p.get("formatted_address",""),
                                     "place_id": pid, "website": None, "email": None}
                     new += 1
-            token = data.get("next_page_token")
+            token = data.get("next_page_token") if len(all_biz) < config["MAX_RESULTS_PER_QUERY"] * len(queries) else None
             while token:
                 time.sleep(2)
                 r2 = requests.get("https://maps.googleapis.com/maps/api/place/textsearch/json",
