@@ -214,7 +214,7 @@ def api_login():
             return jsonify({"ok": False, "message": "Invalid email or password."})
         session["user_id"] = res_user_id
         session["user_email"] = email
-        _ensure_profile_after_auth(user.id, email)
+        _ensure_profile_after_auth(res_user_id, email)
         return jsonify({"ok": True, "redirect": "/dashboard"})
     except Exception as e:
         return jsonify({"ok": False, "message": _auth_error_message(e)})
