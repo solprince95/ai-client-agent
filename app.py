@@ -55,12 +55,14 @@ def sb_insert_profile(uid, email, full_name=""):
         timeout=15, verify=False)
 
 def sb_update_profile(uid, data):
-    http_requests.patch(
+    r = http_requests.patch(
         f"{SUPABASE_URL}/rest/v1/profiles",
         params={"id": f"eq.{uid}"},
         json=data,
         headers={**_sb_headers(), "Prefer": "return=minimal"},
         timeout=15, verify=False)
+    if r.status_code >= 400:
+        raise Exception(f"Profile update failed: {r.text}")
 OWNER_GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "AIzaSyC7BszKyHwmYqIfletuTQszUA_J2fH9siE")
 TRIAL_DAYS = 5
 _user_states = {}
