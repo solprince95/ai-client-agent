@@ -306,8 +306,7 @@ def api_run():
     state = get_user_state(uid)
     if state["running"]:
         return jsonify({"ok": False, "message": "Agent is already running."})
-    res = supabase.table("profiles").select("*").eq("id", uid).single().execute()
-    profile = res.data or {}
+    profile = sb_get_profile(uid) or {}
     from datetime import datetime
     trial_start = profile.get("trial_start")
     if trial_start:
