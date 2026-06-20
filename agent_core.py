@@ -138,7 +138,7 @@ def search_businesses(config, log=_noop):
 #  STEP 2 — Filter businesses with websites
 # ══════════════════════════════════════════════════════
 def fetch_websites(businesses, config, log=_noop):
-    log("Checking which businesses have a website...")
+    log(f"Checking which of {len(businesses)} businesses have a website... (this takes 2-3 minutes, please wait ⏳)")
     with_sites = []
     for i, biz in enumerate(businesses, 1):
         try:
