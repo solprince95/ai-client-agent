@@ -55,13 +55,12 @@ def sb_insert_profile(uid, email, full_name=""):
         timeout=15, verify=False)
 
 def sb_update_profile(uid, data):
-    r = http_requests.patch(
-        f"{SUPABASE_URL}/rest/v1/profiles?id=eq.{uid}",
-        json=data,
-        headers={**_sb_headers(), "Prefer": "return=minimal"},
-        timeout=15, verify=False)
+    url = f"{SUPABASE_URL}/rest/v1/profiles?id=eq.{uid}"
+    headers = {**_sb_headers(), "Prefer": "return=minimal"}
+    r = http_requests.patch(url, json=data, headers=headers, timeout=15, verify=False)
     if r.status_code >= 400:
-        raise Exception(f"Profile update failed: {r.text}")
+        raise Exception(f"Profile update failed ({r.status_code}): {r.text}")
+    return r.status_code, r.text
 OWNER_GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "AIzaSyC7BszKyHwmYqIfletuTQszUA_J2fH9siE")
 TRIAL_DAYS = 5
 _user_states = {}
@@ -259,8 +258,8 @@ def api_save_profile():
         profile = _ensure_profile(uid, session.get("user_email", ""))
         if not profile.get("trial_start"):
             update["trial_start"] = datetime.now(timezone.utc).isoformat()
-        sb_update_profile(uid, update)
-        return jsonify({"ok": True})
+        result = sb_update_profile(uid, update)
+        return jsonify({"ok": True, "debug": {"uid": uid, "update": update, "result": str(result)}})
     except Exception as e:
         return jsonify({"ok": False, "message": _profile_schema_error(e) or str(e)})
 
