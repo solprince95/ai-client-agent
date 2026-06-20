@@ -119,10 +119,8 @@ def _ensure_profile(uid, email=""):
     profile = _get_profile(uid)
     if profile:
         return profile
-    from datetime import datetime, timezone
-    profile = {"id": uid, "full_name": "", "gmail": email, "trial_start": datetime.now(timezone.utc).isoformat()}
-    supabase.table("profiles").insert(profile).execute()
-    return profile
+    sb_insert_profile(uid, email)
+    return sb_get_profile(uid) or {}
 
 def _ensure_profile_after_auth(uid, email=""):
     try:
