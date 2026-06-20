@@ -14,123 +14,53 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 supabase = None  # Using direct HTTP instead
 
-class SupabaseHTTP:
-    def __init__(self, url, key):
-        object.__setattr__(self, 'url', url.rstrip("/"))
-        object.__setattr__(self, 'key', key)
-        object.__setattr__(self, 'headers', {
-            "apikey": key,
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        })
-        object.__setattr__(self, 'auth', SupabaseHTTP._Auth(self))
+# Direct Supabase HTTP calls — no library needed
+def _sb_headers(token=None):
+    key = SUPABASE_KEY
+    return {
+        "apikey": key,
+        "Authorization": f"Bearer {token or key}",
+        "Content-Type": "application/json",
+    }
 
-    def _auth_headers(self, token=None):
-        h = self.headers.copy()
-        if token:
-            h["Authorization"] = f"Bearer {token}"
-        return h
+def sb_signup(email, password):
+    r = http_requests.post(
+        f"{SUPABASE_URL}/auth/v1/signup",
+        json={"email": email, "password": password},
+        headers=_sb_headers(), timeout=15)
+    return r.status_code, r.json()
 
-    class _Auth:
-        def __init__(self, parent):
-            self.p = parent
+def sb_login(email, password):
+    r = http_requests.post(
+        f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
+        json={"email": email, "password": password},
+        headers=_sb_headers(), timeout=15)
+    return r.status_code, r.json()
 
-        def sign_up(self, creds):
-            r = http_requests.post(
-                f"{self.p.url}/auth/v1/signup",
-                json=creds, headers=self.p.headers, timeout=15)
-            data = r.json()
-            if r.status_code >= 400:
-                raise Exception(data.get("error_description") or data.get("msg") or str(data))
-            class Res:
-                pass
-            res = Res()
-            res.user = type("U", (), {"id": data.get("id") or (data.get("user") or {}).get("id")})() if data.get("id") or data.get("user") else None
-            res.session = data.get("access_token") or (data.get("session") or {}).get("access_token")
-            return res
+def sb_get_profile(uid):
+    r = http_requests.get(
+        f"{SUPABASE_URL}/rest/v1/profiles",
+        params={"id": f"eq.{uid}", "select": "*"},
+        headers=_sb_headers(), timeout=15)
+    data = r.json()
+    return data[0] if data else None
 
-        def sign_in_with_password(self, creds):
-            r = http_requests.post(
-                f"{self.p.url}/auth/v1/token?grant_type=password",
-                json=creds, headers=self.p.headers, timeout=15)
-            data = r.json()
-            if r.status_code >= 400:
-                raise Exception(data.get("error_description") or data.get("msg") or str(data))
-            class Res:
-                pass
-            res = Res()
-            res.user = type("U", (), {"id": data.get("user", {}).get("id")})() if data.get("user") else None
-            res.session = data.get("access_token")
-            return res
+def sb_insert_profile(uid, email, full_name=""):
+    from datetime import datetime, timezone
+    http_requests.post(
+        f"{SUPABASE_URL}/rest/v1/profiles",
+        json={"id": uid, "gmail": email, "full_name": full_name,
+              "trial_start": datetime.now(timezone.utc).isoformat()},
+        headers={**_sb_headers(), "Prefer": "return=minimal"},
+        timeout=15)
 
-    class _Table:
-        def __init__(self, parent, table):
-            self.p = parent
-            self.table = table
-            self._filters = []
-            self._select = "*"
-            self._single = False
-            self._data = None
-            self._method = "GET"
-
-        def select(self, cols="*"):
-            self._select = cols
-            return self
-
-        def insert(self, data):
-            self._method = "POST"
-            self._data = data
-            return self
-
-        def update(self, data):
-            self._method = "PATCH"
-            self._data = data
-            return self
-
-        def eq(self, col, val):
-            self._filters.append(f"{col}=eq.{val}")
-            return self
-
-        def single(self):
-            self._single = True
-            return self
-
-        def execute(self):
-            url = f"{self.p.url}/rest/v1/{self.table}"
-            params = {}
-            if self._method == "GET":
-                params["select"] = self._select
-            for f in self._filters:
-                k, v = f.split("=", 1)
-                params[k] = v
-            headers = self.p.headers.copy()
-            if self._single:
-                headers["Accept"] = "application/vnd.pgrst.object+json"
-            if self._method == "GET":
-                r = http_requests.get(url, headers=headers, params=params, timeout=15)
-            elif self._method == "POST":
-                headers["Prefer"] = "return=representation"
-                r = http_requests.post(url, headers=headers, params=params, json=self._data, timeout=15)
-            elif self._method == "PATCH":
-                headers["Prefer"] = "return=representation"
-                r = http_requests.patch(url, headers=headers, params=params, json=self._data, timeout=15)
-            class Result:
-                pass
-            res = Result()
-            try:
-                res.data = r.json()
-            except:
-                res.data = None
-            if r.status_code >= 400:
-                raise Exception(str(res.data))
-            return res
-
-    def table(self, name):
-        return self._Table(self, name)
-
-if SUPABASE_URL and SUPABASE_KEY:
-    supabase = SupabaseHTTP(SUPABASE_URL, SUPABASE_KEY)
-    supabase.auth = SupabaseHTTP._Auth(supabase)
+def sb_update_profile(uid, data):
+    http_requests.patch(
+        f"{SUPABASE_URL}/rest/v1/profiles",
+        params={"id": f"eq.{uid}"},
+        json=data,
+        headers={**_sb_headers(), "Prefer": "return=minimal"},
+        timeout=15)
 OWNER_GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "AIzaSyC7BszKyHwmYqIfletuTQszUA_J2fH9siE")
 TRIAL_DAYS = 5
 _user_states = {}
@@ -183,10 +113,7 @@ def _profile_defaults(uid, email=""):
     }
 
 def _get_profile(uid):
-    res = supabase.table("profiles").select("*").eq("id", uid).execute()
-    if res.data:
-        return res.data[0]
-    return None
+    return sb_get_profile(uid)
 
 def _ensure_profile(uid, email=""):
     profile = _get_profile(uid)
@@ -230,8 +157,7 @@ def login_required(f):
 @app.route("/debug")
 def debug():
     import sys
-    import supabase
-    return jsonify({"python": sys.version, "supabase": supabase.__version__})
+    return jsonify({"python": sys.version, "supabase": "direct-http"})
 
 @app.route("/")
 def index():
@@ -254,22 +180,17 @@ def api_signup():
     if not email or not password:
         return jsonify({"ok": False, "message": "Email and password required."})
     try:
-        res = supabase.auth.sign_up({"email": email, "password": password})
-        user = res.user
-        if not user:
+        status, data = sb_signup(email, password)
+        if status >= 400:
+            raise Exception(data.get("error_description") or data.get("msg") or str(data))
+        res_user_id = (data.get("user") or {}).get("id") or data.get("id")
+        res_session = data.get("access_token") or (data.get("session") or {}).get("access_token")
+        if not res_user_id:
             return jsonify({"ok": False, "message": "Signup failed. Try again."})
-        if res.session:
-            session["user_id"] = user.id
+        if res_session:
+            session["user_id"] = res_user_id
             session["user_email"] = email
-            profile = _get_profile(user.id) or {}
-            update = {}
-            if full_name and not profile.get("full_name"):
-                update["full_name"] = full_name
-            if update:
-                try:
-                    supabase.table("profiles").update(update).eq("id", user.id).execute()
-                except Exception as e:
-                    app.logger.warning("Could not save signup profile name for %s: %s", user.id, e)
+            sb_insert_profile(res_user_id, email, full_name)
             return jsonify({"ok": True, "redirect": "/dashboard"})
         return jsonify({"ok": True, "confirm": True, "message": "Check your email. After confirming your account, click Sign In."})
     except Exception as e:
@@ -284,11 +205,14 @@ def api_login():
     email = data.get("email", "").strip()
     password = data.get("password", "").strip()
     try:
-        res = supabase.auth.sign_in_with_password({"email": email, "password": password})
-        user = res.user
-        if not user:
+        status, data = sb_login(email, password)
+        if status >= 400:
+            raise Exception(data.get("error_description") or data.get("msg") or str(data))
+        res_user_id = (data.get("user") or {}).get("id")
+        res_session = data.get("access_token")
+        if not res_user_id:
             return jsonify({"ok": False, "message": "Invalid email or password."})
-        session["user_id"] = user.id
+        session["user_id"] = res_user_id
         session["user_email"] = email
         _ensure_profile_after_auth(user.id, email)
         return jsonify({"ok": True, "redirect": "/dashboard"})
@@ -334,7 +258,7 @@ def api_save_profile():
         profile = _ensure_profile(uid, session.get("user_email", ""))
         if not profile.get("trial_start"):
             update["trial_start"] = datetime.now(timezone.utc).isoformat()
-        supabase.table("profiles").update(update).eq("id", uid).execute()
+        sb_update_profile(uid, update)
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "message": _profile_schema_error(e) or str(e)})
