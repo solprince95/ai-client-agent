@@ -289,7 +289,9 @@ def send_one(biz, config, log=_noop):
             msg.attach(part)
 
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as srv:
+        with smtplib.SMTP("smtp.gmail.com", 587) as srv:
+            srv.ehlo()
+            srv.starttls()
             srv.login(config["GMAIL_ADDRESS"], config["GMAIL_APP_PASSWORD"].replace(" ", ""))
             srv.sendmail(config["GMAIL_ADDRESS"], biz["email"], msg.as_string())
         mark_sent(biz["email"], name=biz.get("name",""), website=biz.get("website",""))
