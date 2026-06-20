@@ -216,7 +216,8 @@ def api_login():
         _ensure_profile_after_auth(res_user_id, email)
         return jsonify({"ok": True, "redirect": "/dashboard"})
     except Exception as e:
-        return jsonify({"ok": False, "message": _auth_error_message(e)})
+        import traceback
+        return jsonify({"ok": False, "message": _auth_error_message(e), "trace": traceback.format_exc()})
 
 @app.route("/api/auth/logout", methods=["POST"])
 def api_logout():
