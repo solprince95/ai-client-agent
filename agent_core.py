@@ -153,7 +153,7 @@ def fetch_websites(businesses, config, log=_noop):
             pass
         if i % 5 == 0 or i == len(businesses):
             log(f"  Checked {i}/{len(businesses)} — {len(with_sites)} have websites so far")
-        time.sleep(0.5)
+        time.sleep(0.2)
     log(f"{len(with_sites)} of {len(businesses)} businesses have a website.")
     return with_sites
 
