@@ -56,8 +56,7 @@ def sb_insert_profile(uid, email, full_name=""):
 
 def sb_update_profile(uid, data):
     r = http_requests.patch(
-        f"{SUPABASE_URL}/rest/v1/profiles",
-        params={"id": f"eq.{uid}"},
+        f"{SUPABASE_URL}/rest/v1/profiles?id=eq.{uid}",
         json=data,
         headers={**_sb_headers(), "Prefer": "return=minimal"},
         timeout=15, verify=False)
