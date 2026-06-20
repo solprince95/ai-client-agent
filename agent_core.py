@@ -294,9 +294,8 @@ def send_one(biz, config, log=_noop):
             msg.attach(part)
 
     try:
-        with smtplib.SMTP(BREVO_SMTP_HOST, BREVO_SMTP_PORT) as srv:
+        with smtplib.SMTP_SSL(BREVO_SMTP_HOST, 465) as srv:
             srv.ehlo()
-            srv.starttls()
             srv.login(BREVO_SMTP_USER, BREVO_SMTP_PASS)
             srv.sendmail(config["GMAIL_ADDRESS"], biz["email"], msg.as_string())
         mark_sent(biz["email"], name=biz.get("name",""), website=biz.get("website",""))
