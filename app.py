@@ -39,11 +39,10 @@ def sb_login(email, password):
 
 def sb_get_profile(uid):
     r = http_requests.get(
-        f"{SUPABASE_URL}/rest/v1/profiles",
-        params={"id": f"eq.{uid}", "select": "*"},
+        f"{SUPABASE_URL}/rest/v1/profiles?id=eq.{uid}&select=*",
         headers=_sb_headers(), timeout=15, verify=False)
     data = r.json()
-    return data[0] if data else None
+    return data[0] if isinstance(data, list) and data else None
 
 def sb_insert_profile(uid, email, full_name=""):
     from datetime import datetime, timezone
