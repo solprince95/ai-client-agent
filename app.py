@@ -41,6 +41,7 @@ def sb_get_profile(uid):
     r = http_requests.get(
         f"{SUPABASE_URL}/rest/v1/profiles?id=eq.{uid}&select=*",
         headers=_sb_headers(), timeout=15, verify=False)
+    print(f"DEBUG sb_get_profile uid={uid} status={r.status_code} body={r.text[:500]}", flush=True)
     data = r.json()
     return data[0] if isinstance(data, list) and data else None
 
