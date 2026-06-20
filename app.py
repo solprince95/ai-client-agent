@@ -1,7 +1,7 @@
 import threading, queue, os
 from datetime import datetime, timezone
 from flask import Flask, render_template, request, jsonify, Response, session, redirect
-import httpx as http_requests
+import requests as http_requests
 from functools import wraps
 import agent_core
 from paths import get_resource_dir
