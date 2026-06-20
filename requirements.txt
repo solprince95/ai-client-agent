@@ -2,7 +2,6 @@ flask
 requests
 beautifulsoup4
 cryptography
-pyinstaller
 gunicorn
-supabase
+supabase==2.31.0
 gevent
