@@ -3,6 +3,6 @@ requests
 beautifulsoup4
 cryptography
 gunicorn
-supabase==2.10.0
+supabase==1.2.0
 gevent
 pyinstaller
