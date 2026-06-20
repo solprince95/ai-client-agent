@@ -1,8 +1,6 @@
 flask
 requests
-urllib3==1.26.18
 beautifulsoup4
 cryptography
 gunicorn
-gevent
 pyinstaller
