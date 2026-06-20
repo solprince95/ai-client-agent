@@ -267,6 +267,11 @@ def mark_sent(addr, name="", website=""):
         })
 
 
+BREVO_SMTP_HOST = "smtp-relay.brevo.com"
+BREVO_SMTP_PORT = 587
+BREVO_SMTP_USER = os.environ.get("BREVO_SMTP_USER", "af6da2001@smtp-brevo.com")
+BREVO_SMTP_PASS = os.environ.get("BREVO_SMTP_PASS", "")
+
 def send_one(biz, config, log=_noop):
     if biz["email"] in load_sent():
         return False
@@ -289,10 +294,10 @@ def send_one(biz, config, log=_noop):
             msg.attach(part)
 
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587) as srv:
+        with smtplib.SMTP(BREVO_SMTP_HOST, BREVO_SMTP_PORT) as srv:
             srv.ehlo()
             srv.starttls()
-            srv.login(config["GMAIL_ADDRESS"], config["GMAIL_APP_PASSWORD"].replace(" ", ""))
+            srv.login(BREVO_SMTP_USER, BREVO_SMTP_PASS)
             srv.sendmail(config["GMAIL_ADDRESS"], biz["email"], msg.as_string())
         mark_sent(biz["email"], name=biz.get("name",""), website=biz.get("website",""))
         log(f"  ✅ Sent → {biz['name']} ({biz['email']})")
