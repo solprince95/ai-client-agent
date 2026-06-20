@@ -1,7 +1,7 @@
 import threading, queue, os
 from datetime import datetime, timezone
 from flask import Flask, render_template, request, jsonify, Response, session, redirect
-from supabase import create_client, Client
+import requests as http_requests
 from functools import wraps
 import agent_core
 from paths import get_resource_dir
@@ -12,7 +12,127 @@ app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-change-me")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
+supabase = None  # Using direct HTTP instead
+
+class SupabaseHTTP:
+    def __init__(self, url, key):
+        self.url = url.rstrip("/")
+        self.key = key
+        self.headers = {
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+        }
+
+    def _auth_headers(self, token=None):
+        h = self.headers.copy()
+        if token:
+            h["Authorization"] = f"Bearer {token}"
+        return h
+
+    class _Auth:
+        def __init__(self, parent):
+            self.p = parent
+
+        def sign_up(self, creds):
+            r = http_requests.post(
+                f"{self.p.url}/auth/v1/signup",
+                json=creds, headers=self.p.headers, timeout=15)
+            data = r.json()
+            if r.status_code >= 400:
+                raise Exception(data.get("error_description") or data.get("msg") or str(data))
+            class Res:
+                pass
+            res = Res()
+            res.user = type("U", (), {"id": data.get("id") or (data.get("user") or {}).get("id")})() if data.get("id") or data.get("user") else None
+            res.session = data.get("access_token") or (data.get("session") or {}).get("access_token")
+            return res
+
+        def sign_in_with_password(self, creds):
+            r = http_requests.post(
+                f"{self.p.url}/auth/v1/token?grant_type=password",
+                json=creds, headers=self.p.headers, timeout=15)
+            data = r.json()
+            if r.status_code >= 400:
+                raise Exception(data.get("error_description") or data.get("msg") or str(data))
+            class Res:
+                pass
+            res = Res()
+            res.user = type("U", (), {"id": data.get("user", {}).get("id")})() if data.get("user") else None
+            res.session = data.get("access_token")
+            return res
+
+    class _Table:
+        def __init__(self, parent, table):
+            self.p = parent
+            self.table = table
+            self._filters = []
+            self._select = "*"
+            self._single = False
+            self._data = None
+            self._method = "GET"
+
+        def select(self, cols="*"):
+            self._select = cols
+            return self
+
+        def insert(self, data):
+            self._method = "POST"
+            self._data = data
+            return self
+
+        def update(self, data):
+            self._method = "PATCH"
+            self._data = data
+            return self
+
+        def eq(self, col, val):
+            self._filters.append(f"{col}=eq.{val}")
+            return self
+
+        def single(self):
+            self._single = True
+            return self
+
+        def execute(self):
+            url = f"{self.p.url}/rest/v1/{self.table}"
+            params = {}
+            if self._method == "GET":
+                params["select"] = self._select
+            for f in self._filters:
+                k, v = f.split("=", 1)
+                params[k] = v
+            headers = self.p.headers.copy()
+            if self._single:
+                headers["Accept"] = "application/vnd.pgrst.object+json"
+            if self._method == "GET":
+                r = http_requests.get(url, headers=headers, params=params, timeout=15)
+            elif self._method == "POST":
+                headers["Prefer"] = "return=representation"
+                r = http_requests.post(url, headers=headers, params=params, json=self._data, timeout=15)
+            elif self._method == "PATCH":
+                headers["Prefer"] = "return=representation"
+                r = http_requests.patch(url, headers=headers, params=params, json=self._data, timeout=15)
+            class Result:
+                pass
+            res = Result()
+            try:
+                res.data = r.json()
+            except:
+                res.data = None
+            if r.status_code >= 400:
+                raise Exception(str(res.data))
+            return res
+
+    def __init_auth(self):
+        self.auth = self._Auth(self)
+
+    def table(self, name):
+        return self._Table(self, name)
+
+if SUPABASE_URL and SUPABASE_KEY:
+    supabase = SupabaseHTTP(SUPABASE_URL, SUPABASE_KEY)
+    supabase.auth = SupabaseHTTP._Auth(supabase)
 OWNER_GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "AIzaSyC7BszKyHwmYqIfletuTQszUA_J2fH9siE")
 TRIAL_DAYS = 5
 _user_states = {}
