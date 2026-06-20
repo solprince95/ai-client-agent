@@ -209,12 +209,24 @@ async function runAgent() {
   const res = await fetch('/api/run',{method:'POST'});
   const data = await res.json();
   if (!data.ok) { logBox.textContent='❌ '+data.message; btn.disabled=false; btn.textContent='▶ Run Agent'; return; }
+  clearInterval(_pollInterval);
   const evtSource = new EventSource('/api/stream');
-  evtSource.onmessage = (e) => { if(e.data){logBox.textContent+=e.data+'\n'; logBox.scrollTop=logBox.scrollHeight;} };
-  evtSource.addEventListener('done',()=>{ evtSource.close(); btn.disabled=false; btn.textContent='▶ Run Agent'; loadStatus(); });
+  evtSource.onmessage = (e) => {
+    btn.disabled=true; btn.textContent='⏳ Running...';
+    if(e.data){logBox.textContent+=e.data+'\n'; logBox.scrollTop=logBox.scrollHeight;}
+  };
+  evtSource.addEventListener('done',()=>{
+    evtSource.close();
+    btn.disabled=false;
+    btn.textContent='▶ Run Agent';
+    _pollInterval = setInterval(loadStatus, 10000);
+    loadStatus();
+  });
 }
 async function logout() { await fetch('/api/auth/logout',{method:'POST'}); window.location.href='/'; }
-loadProfile(); loadStatus(); setInterval(loadStatus,10000);
+loadProfile();
+loadStatus();
+let _pollInterval = setInterval(loadStatus, 10000);
 </script>
 </body>
 </html>
