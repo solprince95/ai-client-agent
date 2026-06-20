@@ -1,6 +1,5 @@
 flask
-requests
-urllib3==1.26.18
+psycopg2-binary
 beautifulsoup4
 cryptography
 gunicorn
