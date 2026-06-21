@@ -503,7 +503,8 @@ def run_full_pipeline(config, log=_noop, user_id=None):
     sites = fetch_websites(biz, config, log=log)
     leads = find_emails(sites, log=log)
     sent  = send_all(leads, config, log=log, user_id=user_id)
-    check_replies(config, log=log, user_id=user_id)
+    # Reply checking disabled (requires Gmail App Password)
+    log("📭 Reply checking disabled. Check your Gmail inbox manually.")
 
     log("✅ Run complete!")
     return {"ok": True, "found": len(biz), "with_sites": len(sites),
