@@ -1,5 +1,6 @@
 flask
 requests
+supabase
 beautifulsoup4
 cryptography
 gunicorn
