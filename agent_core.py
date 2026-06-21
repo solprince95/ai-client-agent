@@ -350,7 +350,7 @@ def send_one(biz, config, log=_noop, user_id=None):
                 "subject": subject,
                 "htmlContent": body
             },
-            timeout=15
+            timeout=(10, 15)
         )
         if response.status_code >= 400:
             raise Exception(response.text)
