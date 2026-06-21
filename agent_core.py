@@ -374,7 +374,11 @@ def send_all(businesses, config, log=_noop, user_id=None):
     log("Sending personalised emails...")
     sent = 0
     for i, biz in enumerate(businesses):
-        ok = send_one(biz, config, log=log, user_id=user_id)
+        try:
+            ok = send_one(biz, config, log=log, user_id=user_id)
+        except Exception as e:
+            log(f"  ⚠️ Skipped {biz.get('email','?')}: {e}")
+            ok = False
         if ok:
             sent += 1
             if i < len(businesses) - 1:
