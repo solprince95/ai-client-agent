@@ -303,8 +303,8 @@ def mark_sent(addr, name="", website="", user_id=None, subject="", body=""):
                     "body":          body,
                 }).execute)
                 future.result(timeout=10)
-        except Exception:
-            pass  # still write to CSV below
+        except Exception as e:
+            print(f"mark_sent Supabase error: {e}", flush=True)
 
     # Always write to local CSV as backup
     file_exists = os.path.exists(SENT_CSV)
@@ -373,10 +373,32 @@ def send_one(biz, config, log=_noop, user_id=None):
         return False
 
 
+FAKE_EMAIL_PATTERNS = [
+    "example.com", "company.com", "domain.com", "test.com",
+    "yoursite.com", "you@", "info@example", "email@email",
+]
+
+def _is_fake_email(email):
+    email = email.lower().strip()
+    if not email or "@" not in email:
+        return True
+    domain = email.split("@")[-1]
+    # Check for invalid TLDs (real domains have known TLDs)
+    tld = domain.split(".")[-1] if "." in domain else ""
+    if len(tld) > 6 or len(tld) < 2:
+        return True
+    for pattern in FAKE_EMAIL_PATTERNS:
+        if pattern in email:
+            return True
+    return False
+
 def send_all(businesses, config, log=_noop, user_id=None):
     log("Sending personalised emails...")
     sent = 0
     for i, biz in enumerate(businesses):
+        if _is_fake_email(biz.get("email", "")):
+            log(f"  ⏭️ Skipped fake email → {biz.get('email','?')}")
+            continue
         try:
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
