@@ -291,7 +291,7 @@ def _build_config(profile):
         "GMAIL_ADDRESS": profile.get("gmail", ""),
         "GMAIL_APP_PASSWORD": "",
         "GOOGLE_MAPS_API_KEY": OWNER_GOOGLE_MAPS_API_KEY,
-        "MAX_RESULTS_PER_QUERY": 20,
+        "MAX_RESULTS_PER_QUERY": 2,
         "DELAY_BETWEEN_EMAILS": 30,
         "ATTACHMENT_PATH": "",
         "ATTACHMENT_NAME": "",
