@@ -56,7 +56,7 @@ _user_states = {}
 
 def get_user_state(uid):
     if uid not in _user_states:
-        _user_states[uid] = {"running": False, "log_queue": queue.Queue(), "last_result": None}
+        _user_states[uid] = {"running": False, "log_queue": queue.Queue(), "last_result": None, "log_buffer": []}
     return _user_states[uid]
 
 
@@ -330,7 +330,9 @@ def api_run():
 
     def _run():
         def log(message):
-            state["log_queue"].put(str(message))
+            msg = str(message)
+            state["log_buffer"].append(msg)
+            state["log_queue"].put(msg)
         try:
             result = agent_core.run_full_pipeline(cfg, log=log, user_id=uid)
             state["last_result"] = result
@@ -342,6 +344,7 @@ def api_run():
 
     state["running"] = True
     state["log_queue"] = queue.Queue()
+    state["log_buffer"] = []
     t = threading.Thread(target=_run, daemon=True)
     t.start()
     return jsonify({"ok": True})
@@ -368,7 +371,9 @@ def api_check_replies():
 
     def _run():
         def log(message):
-            state["log_queue"].put(str(message))
+            msg = str(message)
+            state["log_buffer"].append(msg)
+            state["log_queue"].put(msg)
         try:
             agent_core.check_replies(cfg, log=log, user_id=uid)
         except Exception as e:
@@ -379,6 +384,7 @@ def api_check_replies():
 
     state["running"] = True
     state["log_queue"] = queue.Queue()
+    state["log_buffer"] = []
     t = threading.Thread(target=_run, daemon=True)
     t.start()
     return jsonify({"ok": True})
@@ -411,6 +417,11 @@ def api_stream():
 
     def event_stream():
         q = state["log_queue"]
+        # Replay missed messages from buffer on reconnect
+        for line in list(state.get("log_buffer", [])):
+            if line != "__DONE__":
+                yield f"data: {line}\n\n"
+        # Stream new messages
         while True:
             try:
                 line = q.get(timeout=30)
