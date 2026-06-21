@@ -397,10 +397,9 @@ def api_check_replies():
 @app.route("/api/sent_emails", methods=["GET"])
 @login_required
 def api_sent_emails():
-    err = _require_supabase()
-    if err:
-        return err
     uid = session["user_id"]
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return jsonify({"ok": False, "message": "Supabase not configured"})
     try:
         from supabase import create_client
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
