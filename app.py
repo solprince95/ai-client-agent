@@ -403,7 +403,7 @@ def api_sent_emails():
     try:
         from supabase import create_client
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("sent_log").select("*").eq("user_id", uid).order("sent_date", desc=True).execute()
+        res = sb.table("sent_log").select("*").eq("user_id", uid).order("created_at", desc=True).execute()
         return jsonify({"ok": True, "emails": res.data})
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)})
