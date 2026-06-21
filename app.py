@@ -417,7 +417,9 @@ def api_stream():
     def event_stream():
         q = state["log_queue"]
         # Replay missed messages from buffer on reconnect
-        for line in list(state.get("log_buffer", [])):
+        buffer_snapshot = list(state.get("log_buffer", []))
+        state["log_buffer"] = []
+        for line in buffer_snapshot:
             if line != "__DONE__":
                 yield f"data: {line}\n\n"
         # Stream new messages
