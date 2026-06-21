@@ -229,7 +229,7 @@ def api_save_profile():
     data = request.get_json(silent=True) or {}
 
     allowed = [
-        "full_name", "business_name", "gmail", "gmail_app_password",
+        "full_name", "business_name", "gmail",
         "your_service", "your_about", "target_city", "business_types",
     ]
     update = {k: v for k, v in data.items() if k in allowed}
@@ -256,7 +256,7 @@ def api_status():
         profile = _get_profile(uid)
         days_left = _days_left_from(profile.get("trial_start"))
 
-        required = ["full_name", "gmail", "gmail_app_password", "your_service", "your_about", "target_city"]
+        required = ["full_name", "gmail", "your_service", "your_about", "target_city"]
         profile_complete = all(str(profile.get(k, "")).strip() for k in required)
 
         return jsonify({
@@ -289,7 +289,7 @@ def _build_config(profile):
         "TARGET_CITY": profile.get("target_city", ""),
         "BUSINESS_TYPES": business_types,
         "GMAIL_ADDRESS": profile.get("gmail", ""),
-        "GMAIL_APP_PASSWORD": profile.get("gmail_app_password", ""),
+        "GMAIL_APP_PASSWORD": "",
         "GOOGLE_MAPS_API_KEY": OWNER_GOOGLE_MAPS_API_KEY,
         "MAX_RESULTS_PER_QUERY": 20,
         "DELAY_BETWEEN_EMAILS": 30,
@@ -322,7 +322,7 @@ def api_run():
     if not allowed:
         return jsonify({"ok": False, "message": msg})
 
-    required = ["full_name", "gmail", "gmail_app_password", "your_service", "your_about", "target_city"]
+    required = ["full_name", "gmail", "your_service", "your_about", "target_city"]
     if not all(str(profile.get(k, "")).strip() for k in required):
         return jsonify({"ok": False, "message": "Please complete your profile first."})
 
@@ -361,7 +361,7 @@ def api_check_replies():
     if not allowed:
         return jsonify({"ok": False, "message": msg})
 
-    if not profile.get("gmail") or not profile.get("gmail_app_password"):
+    if not profile.get("gmail"):
         return jsonify({"ok": False, "message": "Please complete your profile first."})
 
     cfg = _build_config(profile)
@@ -387,6 +387,22 @@ def api_check_replies():
 # ══════════════════════════════════════════════════════
 #  LOG STREAM (Server-Sent Events)
 # ══════════════════════════════════════════════════════
+
+@app.route("/api/sent_emails", methods=["GET"])
+@login_required
+def api_sent_emails():
+    err = _require_supabase()
+    if err:
+        return err
+    uid = session["user_id"]
+    try:
+        from supabase import create_client
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("sent_log").select("*").eq("user_id", uid).order("sent_date", desc=True).execute()
+        return jsonify({"ok": True, "emails": res.data})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+
 @app.route("/api/stream")
 @login_required
 def api_stream():

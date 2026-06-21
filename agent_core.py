@@ -60,7 +60,7 @@ def run_diagnostics(config, log=_noop):
             log(f"❌ Could not reach search engine: {e}")
             ok = False
 
-    if config["GMAIL_APP_PASSWORD"] in ("", "YOUR_GMAIL_APP_PASSWORD") or config["GMAIL_ADDRESS"] in ("", "your_email@gmail.com"):
+    if config["GMAIL_ADDRESS"] in ("", "your_email@gmail.com"):
         log("❌ Gmail not connected yet. Add your email and app password in Setup.")
         ok = False
     else:
@@ -289,7 +289,7 @@ def load_sent(user_id=None):
     return sent
 
 
-def mark_sent(addr, name="", website="", user_id=None):
+def mark_sent(addr, name="", website="", user_id=None, subject="", body=""):
     """
     Record a sent email.
     Writes to Supabase (production) and local CSV (always, as backup).
@@ -307,6 +307,8 @@ def mark_sent(addr, name="", website="", user_id=None):
                 "business_name": name,
                 "website":       website,
                 "sent_date":     today,
+                "subject":       subject,
+                "body":          body,
             }).execute()
         except Exception:
             pass  # still write to CSV below
@@ -365,7 +367,9 @@ def send_one(biz, config, log=_noop, user_id=None):
         mark_sent(biz["email"],
                   name=biz.get("name", ""),
                   website=biz.get("website", ""),
-                  user_id=user_id)
+                  user_id=user_id,
+                  subject=subject,
+                  body=body)
         log(f"  ✅ Sent → {biz['name']} ({biz['email']})")
         return True
     except Exception as e:
