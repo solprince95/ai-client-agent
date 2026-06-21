@@ -354,12 +354,15 @@ def send_one(biz, config, log=_noop, user_id=None):
         )
         if response.status_code >= 400:
             raise Exception(response.text)
-        mark_sent(biz["email"],
-                  name=biz.get("name", ""),
-                  website=biz.get("website", ""),
-                  user_id=user_id,
-                  subject=subject,
-                  body=body)
+        try:
+            mark_sent(biz["email"],
+                      name=biz.get("name", ""),
+                      website=biz.get("website", ""),
+                      user_id=user_id,
+                      subject=subject,
+                      body=body)
+        except Exception as me:
+            log(f"  ⚠️ Sent but log failed: {me}")
         log(f"  ✅ Sent → {biz['name']} ({biz['email']})")
         return True
     except Exception as e:
