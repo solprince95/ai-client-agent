@@ -13,9 +13,7 @@ from email import encoders
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 
-from paths import get_base_dir
-
-BASE     = get_base_dir()
+BASE     = os.path.dirname(os.path.abspath(__file__))
 SENT_CSV = os.path.join(BASE, "sent_log.csv")
 
 EMAIL_RE   = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
@@ -111,7 +109,7 @@ def search_businesses(config, log=_noop):
                                     "address": p.get("formatted_address",""),
                                     "place_id": pid, "website": None, "email": None}
                     new += 1
-            token = data.get("next_page_token") if len(all_biz) < config["MAX_RESULTS_PER_QUERY"] * len(queries) else None
+            token = data.get("next_page_token")
             while token:
                 time.sleep(2)
                 r2 = requests.get("https://maps.googleapis.com/maps/api/place/textsearch/json",
@@ -138,7 +136,7 @@ def search_businesses(config, log=_noop):
 #  STEP 2 — Filter businesses with websites
 # ══════════════════════════════════════════════════════
 def fetch_websites(businesses, config, log=_noop):
-    log(f"Checking which of {len(businesses)} businesses have a website... (this takes 2-3 minutes, please wait ⏳)")
+    log("Checking which businesses have a website...")
     with_sites = []
     for i, biz in enumerate(businesses, 1):
         try:
@@ -151,9 +149,9 @@ def fetch_websites(businesses, config, log=_noop):
                 with_sites.append(biz)
         except Exception:
             pass
-        if i % 5 == 0 or i == len(businesses):
+        if i % 10 == 0 or i == len(businesses):
             log(f"  Checked {i}/{len(businesses)} — {len(with_sites)} have websites so far")
-        time.sleep(0.2)
+        time.sleep(0.5)
     log(f"{len(with_sites)} of {len(businesses)} businesses have a website.")
     return with_sites
 
@@ -199,7 +197,7 @@ def find_emails(businesses, log=_noop):
         if em:
             biz["email"] = em
             with_emails.append(biz)
-        if i % 3 == 0 or i == len(businesses):
+        if i % 5 == 0 or i == len(businesses):
             log(f"  Checked {i}/{len(businesses)} — {len(with_emails)} emails found so far")
         time.sleep(0.8)
     log(f"{len(with_emails)} businesses with usable email addresses.")
@@ -244,36 +242,89 @@ Reply "Unsubscribe" if you'd prefer not to hear from me again.
 
 # ══════════════════════════════════════════════════════
 #  STEP 5 — Send emails
+#  Sent log is stored in Supabase (sent_log table) so it
+#  persists across Render restarts and redeploys.
+#  Falls back to local CSV if Supabase is not configured.
 # ══════════════════════════════════════════════════════
-def load_sent():
+def _get_supabase():
+    """Return a Supabase client if env vars are set, else None."""
+    try:
+        from supabase import create_client
+        url = os.environ.get("SUPABASE_URL", "")
+        key = os.environ.get("SUPABASE_KEY", "")
+        if url and key:
+            return create_client(url, key)
+    except Exception:
+        pass
+    return None
+
+
+def load_sent(user_id=None):
+    """
+    Load already-sent email addresses.
+    Tries Supabase first (production), falls back to local CSV (dev).
+    """
     sent = set()
+
+    # Try Supabase
+    sb = _get_supabase()
+    if sb and user_id:
+        try:
+            res = sb.table("sent_log").select("email").eq("user_id", user_id).execute()
+            for row in (res.data or []):
+                em = row.get("email", "").strip().lower()
+                if em:
+                    sent.add(em)
+            return sent
+        except Exception:
+            pass  # fall through to CSV
+
+    # Fallback: local CSV
     if os.path.exists(SENT_CSV):
         with open(SENT_CSV, newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
-                em = row.get("email","").strip().lower()
-                if em: sent.add(em)
+                em = row.get("email", "").strip().lower()
+                if em:
+                    sent.add(em)
     return sent
 
 
-def mark_sent(addr, name="", website=""):
+def mark_sent(addr, name="", website="", user_id=None):
+    """
+    Record a sent email.
+    Writes to Supabase (production) and local CSV (always, as backup).
+    """
+    addr = addr.lower().strip()
+    today = str(datetime.now().date())
+
+    # Write to Supabase
+    sb = _get_supabase()
+    if sb and user_id:
+        try:
+            sb.table("sent_log").insert({
+                "user_id":       user_id,
+                "email":         addr,
+                "business_name": name,
+                "website":       website,
+                "sent_date":     today,
+            }).execute()
+        except Exception:
+            pass  # still write to CSV below
+
+    # Always write to local CSV as backup
     file_exists = os.path.exists(SENT_CSV)
     with open(SENT_CSV, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["email","name","website","sent_date"])
+        writer = csv.DictWriter(f, fieldnames=["email", "name", "website", "sent_date"])
         if not file_exists:
             writer.writeheader()
         writer.writerow({
-            "email": addr.lower().strip(), "name": name, "website": website,
-            "sent_date": str(datetime.now().date()),
+            "email": addr, "name": name,
+            "website": website, "sent_date": today,
         })
 
 
-BREVO_SMTP_HOST = "smtp-relay.brevo.com"
-BREVO_SMTP_PORT = 587
-BREVO_SMTP_USER = os.environ.get("BREVO_SMTP_USER", "af6da2001@smtp-brevo.com")
-BREVO_SMTP_PASS = os.environ.get("BREVO_SMTP_PASS", "")
-
-def send_one(biz, config, log=_noop):
-    if biz["email"] in load_sent():
+def send_one(biz, config, log=_noop, user_id=None):
+    if biz["email"] in load_sent(user_id=user_id):
         return False
 
     subject, body = build_email(biz, config)
@@ -294,24 +345,13 @@ def send_one(biz, config, log=_noop):
             msg.attach(part)
 
     try:
-        brevo_api_key = os.environ.get("BREVO_API_KEY", "")
-        response = requests.post(
-            "https://api.brevo.com/v3/smtp/email",
-            headers={
-                "api-key": brevo_api_key,
-                "Content-Type": "application/json"
-            },
-            json={
-                "sender": {"name": config.get("YOUR_NAME", ""), "email": config["GMAIL_ADDRESS"]},
-                "to": [{"email": biz["email"], "name": biz.get("name", "")}],
-                "subject": msg["Subject"],
-                "htmlContent": body
-            },
-            timeout=15
-        )
-        if response.status_code >= 400:
-            raise Exception(response.text)
-        mark_sent(biz["email"], name=biz.get("name",""), website=biz.get("website",""))
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as srv:
+            srv.login(config["GMAIL_ADDRESS"], config["GMAIL_APP_PASSWORD"].replace(" ", ""))
+            srv.sendmail(config["GMAIL_ADDRESS"], biz["email"], msg.as_string())
+        mark_sent(biz["email"],
+                  name=biz.get("name", ""),
+                  website=biz.get("website", ""),
+                  user_id=user_id)
         log(f"  ✅ Sent → {biz['name']} ({biz['email']})")
         return True
     except Exception as e:
@@ -319,11 +359,11 @@ def send_one(biz, config, log=_noop):
         return False
 
 
-def send_all(businesses, config, log=_noop):
+def send_all(businesses, config, log=_noop, user_id=None):
     log("Sending personalised emails...")
     sent = 0
     for i, biz in enumerate(businesses):
-        ok = send_one(biz, config, log=log)
+        ok = send_one(biz, config, log=log, user_id=user_id)
         if ok:
             sent += 1
             if i < len(businesses) - 1:
@@ -335,39 +375,80 @@ def send_all(businesses, config, log=_noop):
 # ══════════════════════════════════════════════════════
 #  CHECK REPLIES
 # ══════════════════════════════════════════════════════
-def check_replies(config, log=_noop):
-    log("Checking your inbox for replies...")
+def check_replies(config, log=_noop, user_id=None):
+    """
+    Only shows replies from email addresses we actually contacted.
+    Loads contacted list from Supabase (production) or CSV (dev/fallback).
+    """
+    log("Checking your inbox for replies from contacted businesses...")
     replies = []
+
+    # Load the list of emails we sent to
+    contacted = load_sent(user_id=user_id)
+
+    if not contacted:
+        log("📭 No sent emails on record yet — run the agent first.")
+        return replies
+
+    log(f"   Checking for replies from {len(contacted)} contacted business(es)...")
+
     try:
         mail = imaplib.IMAP4_SSL("imap.gmail.com")
-        mail.login(config["GMAIL_ADDRESS"], config["GMAIL_APP_PASSWORD"].replace(" ",""))
+        mail.login(config["GMAIL_ADDRESS"], config["GMAIL_APP_PASSWORD"].replace(" ", ""))
         mail.select("inbox")
-        _, data = mail.search(None, "UNSEEN")
-        ids = data[0].split()
-        if not ids:
-            log("📭 No new replies.")
+
+        # Search ALL inbox messages (not just UNSEEN) so we don't miss anything
+        _, data = mail.search(None, "ALL")
+        all_ids = data[0].split()
+
+        found = 0
+        for eid in all_ids:
+            try:
+                # Fetch only headers first (much faster than full RFC822)
+                _, md = mail.fetch(eid, "(BODY[HEADER.FIELDS (FROM)])")
+                raw_from = md[0][1].decode(errors="ignore").lower()
+
+                # Quick check — is any contacted email in this header?
+                if not any(em in raw_from for em in contacted):
+                    continue
+
+                # Full fetch only for matching messages
+                _, md_full = mail.fetch(eid, "(RFC822)")
+                msg = email.message_from_bytes(md_full[0][1])
+
+                sender_raw = msg.get("From", "")
+                import email.utils as eu
+                _, sender_addr = eu.parseaddr(sender_raw)
+                sender_addr = sender_addr.lower().strip()
+
+                if sender_addr in contacted:
+                    found += 1
+                    replies.append({
+                        "from":    sender_raw,
+                        "subject": msg.get("Subject", ""),
+                        "date":    msg.get("Date", ""),
+                    })
+                    log(f"  🎉 REPLY → From: {sender_raw} | Subject: {msg.get('Subject','')}")
+            except Exception:
+                continue
+
+        if found == 0:
+            log("📭 No replies from contacted businesses yet. Keep following up!")
         else:
-            log(f"📬 {len(ids)} new message(s)!")
-            for eid in ids:
-                _, md = mail.fetch(eid, "(RFC822)")
-                msg = email.message_from_bytes(md[0][1])
-                replies.append({
-                    "from": msg.get("From",""),
-                    "subject": msg.get("Subject",""),
-                    "date": msg.get("Date",""),
-                })
-                log(f"  From: {msg['From']} | Subject: {msg['Subject']}")
+            log(f"📬 {found} reply(ies) from businesses you contacted!")
+
         mail.logout()
     except imaplib.IMAP4.error as e:
         log(f"❌ Gmail error: {e}")
-        log("   Enable IMAP: Gmail Settings → Forwarding and POP/IMAP")
+        log("   Enable IMAP: Gmail ⚙️ → See all settings → Forwarding and POP/IMAP")
+
     return replies
 
 
 # ══════════════════════════════════════════════════════
 #  FULL PIPELINE
 # ══════════════════════════════════════════════════════
-def run_full_pipeline(config, log=_noop):
+def run_full_pipeline(config, log=_noop, user_id=None):
     if not run_diagnostics(config, log=log):
         log("⛔ Setup incomplete. Fix the issues above in Setup, then run again.")
         return {"ok": False}
@@ -375,8 +456,8 @@ def run_full_pipeline(config, log=_noop):
     biz   = search_businesses(config, log=log)
     sites = fetch_websites(biz, config, log=log)
     leads = find_emails(sites, log=log)
-    sent  = send_all(leads, config, log=log)
-    check_replies(config, log=log)
+    sent  = send_all(leads, config, log=log, user_id=user_id)
+    check_replies(config, log=log, user_id=user_id)
 
     log("✅ Run complete!")
     return {"ok": True, "found": len(biz), "with_sites": len(sites),
@@ -386,7 +467,16 @@ def run_full_pipeline(config, log=_noop):
 # ══════════════════════════════════════════════════════
 #  STATS
 # ══════════════════════════════════════════════════════
-def get_stats():
+def get_stats(user_id=None):
+    """Total emails sent — from Supabase if available, else local CSV."""
+    sb = _get_supabase()
+    if sb and user_id:
+        try:
+            res = sb.table("sent_log").select("id", count="exact").eq("user_id", user_id).execute()
+            return {"total_sent": res.count or 0}
+        except Exception:
+            pass
+    # Fallback: local CSV
     total_sent = 0
     if os.path.exists(SENT_CSV):
         with open(SENT_CSV, newline="", encoding="utf-8") as f:
