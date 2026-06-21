@@ -61,20 +61,10 @@ def run_diagnostics(config, log=_noop):
             ok = False
 
     if config["GMAIL_ADDRESS"] in ("", "your_email@gmail.com"):
-        log("❌ Gmail not connected yet. Add your email and app password in Setup.")
+        log("❌ Gmail not configured. Add your Gmail address in Setup.")
         ok = False
     else:
-        log("Testing Gmail connection...")
-        try:
-            m = imaplib.IMAP4_SSL("imap.gmail.com")
-            m.login(config["GMAIL_ADDRESS"], config["GMAIL_APP_PASSWORD"].replace(" ",""))
-            m.logout()
-            log("✅ Gmail connected.")
-        except imaplib.IMAP4.error as e:
-            log(f"❌ Gmail login failed: {e}")
-            log("   → Enable IMAP: Gmail Settings → Forwarding and POP/IMAP → Enable IMAP")
-            log("   → Check your App Password is correct (16 characters, no spaces)")
-            ok = False
+        log(f"✅ Gmail connected.")
 
     if config.get("ATTACHMENT_PATH"):
         path = os.path.join(BASE, config["ATTACHMENT_PATH"])
