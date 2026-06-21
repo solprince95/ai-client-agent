@@ -291,15 +291,18 @@ def mark_sent(addr, name="", website="", user_id=None, subject="", body=""):
     sb = _get_supabase()
     if sb and user_id:
         try:
-            sb.table("sent_log").insert({
-                "user_id":       user_id,
-                "email":         addr,
-                "business_name": name,
-                "website":       website,
-                "sent_date":     today,
-                "subject":       subject,
-                "body":          body,
-            }).execute()
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                future = ex.submit(sb.table("sent_log").insert({
+                    "user_id":       user_id,
+                    "email":         addr,
+                    "business_name": name,
+                    "website":       website,
+                    "sent_date":     today,
+                    "subject":       subject,
+                    "body":          body,
+                }).execute)
+                future.result(timeout=10)
         except Exception:
             pass  # still write to CSV below
 
