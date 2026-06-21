@@ -267,6 +267,8 @@ function toggleEmail(i) {
   toggle.textContent = isOpen ? '▲ Hide Email' : '▼ View Email';
 }
 
+let _streaming = false;
+
 async function runAgent() {
   const btn = document.getElementById('run-btn');
   const logBox = document.getElementById('log-box');
@@ -276,21 +278,23 @@ async function runAgent() {
   const data = await res.json();
   if (!data.ok) { logBox.textContent='❌ '+data.message; btn.disabled=false; btn.textContent='▶ Run Agent'; return; }
   clearInterval(_pollInterval);
+  _streaming = false;
   connectStream();
 }
 
 function connectStream() {
+  if (_streaming) return;
+  _streaming = true;
   const btn = document.getElementById('run-btn');
   const logBox = document.getElementById('log-box');
-  let receivedData = false;
   const evtSource = new EventSource('/api/stream');
   evtSource.onmessage = (e) => {
-    receivedData = true;
     btn.disabled=true; btn.textContent='⏳ Running...';
     if(e.data){ logBox.textContent+=e.data+'\n'; logBox.scrollTop=logBox.scrollHeight; }
   };
   evtSource.addEventListener('done',()=>{
     evtSource.close();
+    _streaming = false;
     btn.disabled=false;
     btn.textContent='▶ Run Agent';
     _pollInterval = setInterval(loadStatus, 10000);
@@ -298,7 +302,7 @@ function connectStream() {
   });
   evtSource.onerror = () => {
     evtSource.close();
-    if (!receivedData) return; // Don't reconnect if stream never delivered data
+    _streaming = false;
     setTimeout(async () => {
       const res = await fetch('/api/status');
       const data = await res.json();
@@ -314,7 +318,6 @@ function connectStream() {
     }, 3000);
   };
 }
-
 async function logout() { await fetch('/api/auth/logout',{method:'POST'}); window.location.href='/'; }
 loadProfile();
 loadStatus();
