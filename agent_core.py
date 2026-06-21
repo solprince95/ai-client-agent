@@ -345,9 +345,23 @@ def send_one(biz, config, log=_noop, user_id=None):
             msg.attach(part)
 
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as srv:
-            srv.login(config["GMAIL_ADDRESS"], config["GMAIL_APP_PASSWORD"].replace(" ", ""))
-            srv.sendmail(config["GMAIL_ADDRESS"], biz["email"], msg.as_string())
+        brevo_api_key = os.environ.get("BREVO_API_KEY", "")
+        response = requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={
+                "api-key": brevo_api_key,
+                "Content-Type": "application/json"
+            },
+            json={
+                "sender": {"name": config.get("YOUR_NAME", ""), "email": config["GMAIL_ADDRESS"]},
+                "to": [{"email": biz["email"], "name": biz.get("name", "")}],
+                "subject": subject,
+                "htmlContent": body
+            },
+            timeout=15
+        )
+        if response.status_code >= 400:
+            raise Exception(response.text)
         mark_sent(biz["email"],
                   name=biz.get("name", ""),
                   website=biz.get("website", ""),
