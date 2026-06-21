@@ -378,7 +378,13 @@ def send_all(businesses, config, log=_noop, user_id=None):
     sent = 0
     for i, biz in enumerate(businesses):
         try:
-            ok = send_one(biz, config, log=log, user_id=user_id)
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                future = ex.submit(send_one, biz, config, log, user_id)
+                ok = future.result(timeout=30)
+        except concurrent.futures.TimeoutError:
+            log(f"  ⚠️ Timed out → {biz.get('email','?')} (skipping)")
+            ok = False
         except Exception as e:
             log(f"  ⚠️ Skipped {biz.get('email','?')}: {e}")
             ok = False
