@@ -1,6 +1,6 @@
 flask
 requests
-supabase
+supabase==2.3.4
 beautifulsoup4
 cryptography
 gunicorn
