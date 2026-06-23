@@ -101,7 +101,7 @@ def search_businesses(config, log=_noop):
                     new += 1
             token = data.get("next_page_token")
             while token:
-                time.sleep(2)
+                time.sleep(0.2)
                 r2 = requests.get("https://maps.googleapis.com/maps/api/place/textsearch/json",
                                   params={"pagetoken": token,
                                           "key": config["GOOGLE_MAPS_API_KEY"]}, timeout=10)
@@ -117,7 +117,7 @@ def search_businesses(config, log=_noop):
             log(f"  '{query}' → +{new} ({len(all_biz)} total found)")
         except Exception as e:
             log(f"  '{query}' → error: {e}")
-        time.sleep(1)
+        time.sleep(0.1)
     log(f"Found {len(all_biz)} unique businesses.")
     return list(all_biz.values())
 
@@ -141,7 +141,7 @@ def fetch_websites(businesses, config, log=_noop):
             pass
         if i % 10 == 0 or i == len(businesses):
             log(f"  Checked {i}/{len(businesses)} — {len(with_sites)} have websites so far")
-        time.sleep(0.5)
+        time.sleep(0.2)
     log(f"{len(with_sites)} of {len(businesses)} businesses have a website.")
     return with_sites
 
@@ -174,7 +174,7 @@ def extract_email(site_url):
                     found.add(e.lower())
         except Exception:
             pass
-        time.sleep(0.3)
+        time.sleep(0.1)
     clean = [e for e in found if "noreply" not in e and "no-reply" not in e]
     return clean[0] if clean else (list(found)[0] if found else None)
 
@@ -189,7 +189,7 @@ def find_emails(businesses, log=_noop):
             with_emails.append(biz)
         if i % 5 == 0 or i == len(businesses):
             log(f"  Checked {i}/{len(businesses)} — {len(with_emails)} emails found so far")
-        time.sleep(0.8)
+        time.sleep(0.2)
     log(f"{len(with_emails)} businesses with usable email addresses.")
     return with_emails
 
