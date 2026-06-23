@@ -66,16 +66,16 @@
 <nav>
   <div class="logo"> AI Client Agent</div>
   <div class="nav-right">
-    <span class="trial-badge" id="trial-badge">⏳ 5 days trial</span>
+    <span class="trial-badge" id="trial-badge"> 5 days trial</span>
     <button class="logout-btn" onclick="logout()">Sign Out</button>
   </div>
 </nav>
 <div class="container">
   <div class="tabs">
-    <button class="tab active" onclick="switchTab('run')">🚀 Run Agent</button>
-    <button class="tab" onclick="switchTab('setup')">⚙️ Setup</button>
-    <button class="tab" onclick="switchTab('sent')">📬 Sent Emails</button>
-    <button class="tab" onclick="switchTab('billing')">💳 Billing</button>
+    <button class="tab active" onclick="switchTab('run')"> Run Agent</button>
+    <button class="tab" onclick="switchTab('setup')"> Setup</button>
+    <button class="tab" onclick="switchTab('sent')"> Sent Emails</button>
+    <button class="tab" onclick="switchTab('billing')"> Billing</button>
   </div>
 
   <!-- RUN TAB -->
@@ -168,14 +168,14 @@ async function loadProfile() {
   document.getElementById('gmail').value = p.gmail||'';
   const days = p.days_left;
   const badge = document.getElementById('trial-badge');
-  if (p.is_paid) { badge.textContent='✅ Active'; badge.style.background='rgba(39,174,96,0.3)'; }
-  else if (days>0) { badge.textContent=`⏳ ${days} day${days===1?'':'s'} left`; }
-  else { badge.textContent='⛔ Trial ended'; badge.style.background='rgba(231,76,60,0.3)'; }
+  if (p.is_paid) { badge.textContent=' Active'; badge.style.background='rgba(39,174,96,0.3)'; }
+  else if (days>0) { badge.textContent=` ${days} day${days===1?'':'s'} left`; }
+  else { badge.textContent=' Trial ended'; badge.style.background='rgba(231,76,60,0.3)'; }
   const billStatus = document.getElementById('billing-status');
   const paySection = document.getElementById('pay-section');
-  if (p.is_paid) { billStatus.innerHTML='<p style="color:#27ae60;font-weight:700;">✅ Active Subscriber</p>'; }
-  else if (days>0) { billStatus.innerHTML=`<p style="color:#1a56db;font-weight:600;">🎁 Free Trial. ${days} day${days===1?'':'s'} remaining</p>`; paySection.style.display='block'; }
-  else { billStatus.innerHTML='<p style="color:#e74c3c;font-weight:700;">⛔ Trial Ended. Please pay to continue</p>'; paySection.style.display='block'; }
+  if (p.is_paid) { billStatus.innerHTML='<p style="color:#27ae60;font-weight:700;"> Active Subscriber</p>'; }
+  else if (days>0) { billStatus.innerHTML=`<p style="color:#1a56db;font-weight:600;"> Free Trial. ${days} day${days===1?'':'s'} remaining</p>`; paySection.style.display='block'; }
+  else { billStatus.innerHTML='<p style="color:#e74c3c;font-weight:700;"> Trial Ended. Please pay to continue</p>'; paySection.style.display='block'; }
 }
 
 async function loadStatus() {
@@ -185,10 +185,10 @@ async function loadStatus() {
   const btn = document.getElementById('run-btn');
   const note = document.getElementById('run-note');
   const msg = document.getElementById('status-msg');
-  if (!data.profile_complete) { msg.textContent='⚠️ Profile incomplete. Go to Setup tab.'; note.textContent='Complete your profile in Setup first.'; btn.disabled=true; }
-  else if (!data.is_paid && data.days_left<=0) { msg.textContent='⛔ Trial ended. Upgrade in Billing tab.'; btn.disabled=true; }
-  else if (data.running) { msg.textContent='⏳ Agent is running...'; btn.disabled=true; btn.textContent='⏳ Running...'; }
-  else { msg.textContent='✅ Ready to run.'; btn.disabled=false; btn.textContent='▶ Run Agent'; note.textContent=`${data.days_left} trial day${data.days_left===1?'':'s'} remaining.`; }
+  if (!data.profile_complete) { msg.textContent=' Profile incomplete. Go to Setup tab.'; note.textContent='Complete your profile in Setup first.'; btn.disabled=true; }
+  else if (!data.is_paid && data.days_left<=0) { msg.textContent=' Trial ended. Upgrade in Billing tab.'; btn.disabled=true; }
+  else if (data.running) { msg.textContent=' Agent is running...'; btn.disabled=true; btn.textContent=' Running...'; }
+  else { msg.textContent=' Ready to run.'; btn.disabled=false; btn.textContent='▶ Run Agent'; note.textContent=`${data.days_left} trial day${data.days_left===1?'':'s'} remaining.`; }
 }
 
 async function saveProfile() {
@@ -236,7 +236,7 @@ async function loadSentEmails() {
     const data = await res.json();
     if (!data.ok) { container.innerHTML = '<div class="sent-empty">Could not load emails.</div>'; return; }
     if (!data.emails || data.emails.length === 0) {
-      container.innerHTML = '<div class="sent-empty">📭 No emails sent yet. Run the agent to start sending!</div>';
+      container.innerHTML = '<div class="sent-empty"> No emails sent yet. Run the agent to start sending!</div>';
       return;
     }
     container.innerHTML = data.emails.map((e, i) => `
@@ -272,7 +272,7 @@ let _streaming = false;
 async function runAgent() {
   const btn = document.getElementById('run-btn');
   const logBox = document.getElementById('log-box');
-  btn.disabled=true; btn.textContent='⏳ Starting...';
+  btn.disabled=true; btn.textContent=' Starting...';
   logBox.style.display='block'; logBox.textContent='';
   const res = await fetch('/api/run',{method:'POST'});
   const data = await res.json();
@@ -307,7 +307,7 @@ function connectStream() {
       const res = await fetch('/api/status');
       const data = await res.json();
       if (data.ok && data.running) {
-        logBox.textContent += '\n⚠️ Reconnecting...\n';
+        logBox.textContent += '\n Reconnecting...\n';
         connectStream();
       } else {
         btn.disabled=false;
