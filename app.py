@@ -141,6 +141,15 @@ def api_signup():
         identities = getattr(user, "identities", None)
         if identities is not None and len(identities) == 0:
             return jsonify({"ok": False, "message": "This email is already registered. Please sign in instead."})
+        # Insert profile even before confirmation so it exists when they log in
+        try:
+            existing = supabase.table("profiles").select("id").eq("id", user.id).execute()
+            if not existing.data:
+                supabase.table("profiles").insert({
+                    "id": user.id, "email": email, "full_name": full_name, "gmail": email,
+                }).execute()
+        except Exception:
+            pass
         return jsonify({"ok": True, "confirm": True,
                          "message": "Check your email and click the confirmation link to activate your account."})
 
