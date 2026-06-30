@@ -53,6 +53,33 @@
   .sent-empty { text-align: center; color: #aaa; padding: 3rem 1rem; font-size: 0.95rem; }
   .sent-loading { text-align: center; color: #888; padding: 2rem; }
   @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } }
+
+  /* ── LEADS / CRM ───────────────────────────────────── */
+  .crm-toolbar { display: flex; gap: 0.6rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+  .crm-search { flex: 1; min-width: 180px; padding: 0.65rem 0.9rem; border: 1.5px solid #dde3ff; border-radius: 8px; font-size: 0.88rem; outline: none; font-family: inherit; }
+  .crm-search:focus { border-color: #1a56db; }
+  .crm-select { padding: 0.65rem 0.9rem; border: 1.5px solid #dde3ff; border-radius: 8px; font-size: 0.85rem; outline: none; background: #fff; font-family: inherit; color: #444; }
+  .crm-stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.25rem; }
+  .crm-stat { background: #fff; border: 1.5px solid #dde3ff; border-radius: 10px; padding: 0.85rem 1rem; text-align: center; }
+  .crm-stat-val { font-size: 1.4rem; font-weight: 800; color: #1a56db; }
+  .crm-stat-label { font-size: 0.72rem; color: #888; margin-top: 0.2rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em; }
+  .lead-list { display: flex; flex-direction: column; gap: 0.65rem; }
+  .lead-card { border: 1.5px solid #dde3ff; border-radius: 10px; padding: 0.85rem 1rem; background: #fff; display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap; }
+  .lead-main { flex: 1; min-width: 200px; }
+  .lead-name { font-weight: 700; font-size: 0.95rem; color: #1a1a2e; }
+  .lead-sub { font-size: 0.8rem; color: #888; margin-top: 0.15rem; }
+  .lead-score { display: flex; flex-direction: column; align-items: center; width: 54px; }
+  .lead-score-val { font-size: 1rem; font-weight: 800; }
+  .lead-score-val.hi { color: #27ae60; }
+  .lead-score-val.mid { color: #e6a800; }
+  .lead-score-val.lo { color: #c0392b; }
+  .lead-score-label { font-size: 0.62rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.03em; }
+  .lead-status-select, .lead-group-select { padding: 0.4rem 0.6rem; border: 1.5px solid #dde3ff; border-radius: 6px; font-size: 0.78rem; font-weight: 600; outline: none; cursor: pointer; background: #fff; }
+  .lead-status-select.st-new { color: #555; }
+  .lead-status-select.st-contacted { color: #1a56db; }
+  .lead-status-select.st-replied { color: #27ae60; }
+  .lead-status-select.st-closed { color: #888; }
+  .lead-status-select.st-unsubscribed { color: #c0392b; }
 </style>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-2RWLQ2LHCL"></script>
 <script>
@@ -73,6 +100,7 @@
 <div class="container">
   <div class="tabs">
     <button class="tab active" onclick="switchTab('run')"> Run Agent</button>
+    <button class="tab" onclick="switchTab('leads')"> Leads</button>
     <button class="tab" onclick="switchTab('setup')"> Setup</button>
     <button class="tab" onclick="switchTab('sent')"> Sent Emails</button>
     <button class="tab" onclick="switchTab('billing')"> Billing</button>
@@ -88,6 +116,40 @@
         <p class="run-note" id="run-note">Complete your profile in Setup first.</p>
       </div>
       <div id="log-box"></div>
+    </div>
+  </div>
+
+  <!-- LEADS TAB (CRM) -->
+  <div class="tab-content" id="tab-leads">
+    <div class="card">
+      <h3> Your CRM</h3>
+      <p style="font-size:0.85rem;color:#888;margin-bottom:1rem;">Every business the agent has found, scored, and tracked through your pipeline.</p>
+
+      <div class="crm-stats-row">
+        <div class="crm-stat"><div class="crm-stat-val" id="crm-total">—</div><div class="crm-stat-label">Total Leads</div></div>
+        <div class="crm-stat"><div class="crm-stat-val" id="crm-contacted">—</div><div class="crm-stat-label">Contacted</div></div>
+        <div class="crm-stat"><div class="crm-stat-val" id="crm-replied">—</div><div class="crm-stat-label">Replied</div></div>
+        <div class="crm-stat"><div class="crm-stat-val" id="crm-closed">—</div><div class="crm-stat-label">Closed</div></div>
+      </div>
+
+      <div class="crm-toolbar">
+        <input type="text" class="crm-search" id="crm-search" placeholder="Search name, email, or address..." oninput="debouncedLoadLeads()"/>
+        <select class="crm-select" id="crm-status-filter" onchange="loadLeads()">
+          <option value="">All statuses</option>
+          <option value="new">New</option>
+          <option value="contacted">Contacted</option>
+          <option value="replied">Replied</option>
+          <option value="closed">Closed</option>
+          <option value="unsubscribed">Unsubscribed</option>
+        </select>
+        <select class="crm-select" id="crm-group-filter" onchange="loadLeads()">
+          <option value="">All groups</option>
+        </select>
+      </div>
+
+      <div id="lead-list" class="lead-list">
+        <div class="sent-loading">Loading...</div>
+      </div>
     </div>
   </div>
 
@@ -108,6 +170,15 @@
       <p style="font-size:0.85rem;color:#888;margin-bottom:1rem;">Your Gmail address is used as the sender name for outreach emails.</p>
       <div class="form-row">
         <div class="form-group full"><label>Gmail Address</label><input type="email" id="gmail" placeholder="your@gmail.com"/></div>
+        <div class="form-group full">
+          <label>Gmail App Password</label>
+          <input type="text" id="gmail_app_password" placeholder="Leave blank to keep current password"/>
+          <p style="font-size:0.78rem;color:#888;margin-top:0.3rem;">
+            Needed so the agent can check your inbox for replies automatically.
+            Generate one at <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:#1a56db;">myaccount.google.com/apppasswords</a> (requires 2-Step Verification).
+            <span id="app-pw-status" style="font-weight:600;"></span>
+          </p>
+        </div>
       </div>
     </div>
     <div style="display:flex;align-items:center;">
@@ -148,11 +219,12 @@
 
 <script>
 function switchTab(tab) {
-  const tabs = ['run','setup','sent','billing'];
+  const tabs = ['run','leads','setup','sent','billing'];
   document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', tabs[i]===tab));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
   if (tab === 'sent') loadSentEmails();
+  if (tab === 'leads') { loadLeadGroups(); loadLeads(); }
 }
 
 async function loadProfile() {
@@ -166,6 +238,9 @@ async function loadProfile() {
   document.getElementById('your_about').value = p.your_about||'';
   document.getElementById('target_city').value = p.target_city||'';
   document.getElementById('gmail').value = p.gmail||'';
+  const pwStatus = document.getElementById('app-pw-status');
+  pwStatus.textContent = p.has_gmail_app_password ? ' ✓ Saved' : ' Not set yet';
+  pwStatus.style.color = p.has_gmail_app_password ? '#27ae60' : '#c0392b';
   const days = p.days_left;
   const badge = document.getElementById('trial-badge');
   if (p.is_paid) { badge.textContent=' Active'; badge.style.background='rgba(39,174,96,0.3)'; }
@@ -202,6 +277,8 @@ async function saveProfile() {
     target_city: document.getElementById('target_city').value,
     gmail: document.getElementById('gmail').value
   };
+  const appPw = document.getElementById('gmail_app_password').value.trim();
+  if (appPw) data.gmail_app_password = appPw.replace(/\s/g, '');
   btn.disabled = true;
   msg.style.display = 'inline';
   msg.style.color = '#555';
@@ -213,6 +290,7 @@ async function saveProfile() {
     if (result.ok) {
       msg.style.color = '#27ae60';
       msg.textContent = 'Saved!';
+      document.getElementById('gmail_app_password').value = '';
       await loadProfile();
       await loadStatus();
     } else {
@@ -226,6 +304,106 @@ async function saveProfile() {
     btn.disabled = false;
     setTimeout(()=>msg.style.display='none', 3500);
   }
+}
+
+// ── LEADS / CRM ──────────────────────────────────────
+let _crmDebounce;
+function debouncedLoadLeads() {
+  clearTimeout(_crmDebounce);
+  _crmDebounce = setTimeout(loadLeads, 350);
+}
+
+function scoreClass(score) {
+  if (score >= 70) return 'hi';
+  if (score >= 40) return 'mid';
+  return 'lo';
+}
+
+async function loadLeadGroups() {
+  try {
+    const res = await fetch('/api/leads/groups');
+    const data = await res.json();
+    if (!data.ok) return;
+    const sel = document.getElementById('crm-group-filter');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">All groups</option>' +
+      data.groups.map(g => `<option value="${g}">${g}</option>`).join('');
+    sel.value = current;
+  } catch (e) { /* non-fatal */ }
+}
+
+async function loadLeads() {
+  const container = document.getElementById('lead-list');
+  const search = document.getElementById('crm-search').value.trim();
+  const status = document.getElementById('crm-status-filter').value;
+  const group = document.getElementById('crm-group-filter').value;
+
+  const params = new URLSearchParams();
+  if (search) params.set('q', search);
+  if (status) params.set('status', status);
+  if (group) params.set('group', group);
+
+  try {
+    const res = await fetch('/api/leads?' + params.toString());
+    const data = await res.json();
+    if (!data.ok) { container.innerHTML = '<div class="sent-empty">Could not load leads.</div>'; return; }
+
+    const leads = data.leads || [];
+    document.getElementById('crm-total').textContent = leads.length;
+    document.getElementById('crm-contacted').textContent = leads.filter(l => l.status === 'contacted').length;
+    document.getElementById('crm-replied').textContent = leads.filter(l => l.status === 'replied').length;
+    document.getElementById('crm-closed').textContent = leads.filter(l => l.status === 'closed').length;
+
+    if (leads.length === 0) {
+      container.innerHTML = '<div class="sent-empty">No leads yet. Run the agent to start building your CRM.</div>';
+      return;
+    }
+
+    container.innerHTML = leads.map(l => `
+      <div class="lead-card">
+        <div class="lead-score">
+          <div class="lead-score-val ${scoreClass(l.match_score||0)}">${l.match_score||0}</div>
+          <div class="lead-score-label">Match</div>
+        </div>
+        <div class="lead-main">
+          <div class="lead-name">${l.business_name || 'Unknown'}</div>
+          <div class="lead-sub">${l.email || ''}${l.city ? ' · ' + l.city : ''}${l.business_type ? ' · ' + l.business_type : ''}</div>
+        </div>
+        <select class="lead-status-select st-${l.status}" onchange="updateLeadField('${l.id}', 'status', this.value, this)">
+          <option value="new" ${l.status==='new'?'selected':''}>New</option>
+          <option value="contacted" ${l.status==='contacted'?'selected':''}>Contacted</option>
+          <option value="replied" ${l.status==='replied'?'selected':''}>Replied</option>
+          <option value="closed" ${l.status==='closed'?'selected':''}>Closed</option>
+          <option value="unsubscribed" ${l.status==='unsubscribed'?'selected':''}>Unsubscribed</option>
+        </select>
+        <select class="lead-group-select" onchange="updateLeadField('${l.id}', 'group_tag', this.value, this)">
+          ${['uncategorized','hot','warm','cold','vip'].map(g =>
+            `<option value="${g}" ${ (l.group_tag||'uncategorized')===g ? 'selected':''}>${g}</option>`).join('')}
+        </select>
+      </div>
+    `).join('');
+  } catch (err) {
+    container.innerHTML = '<div class="sent-empty">Error loading leads.</div>';
+  }
+}
+
+async function updateLeadField(leadId, field, value, el) {
+  el.disabled = true;
+  try {
+    const body = {}; body[field] = value;
+    const res = await fetch('/api/leads/' + leadId, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (data.ok) {
+      if (field === 'status') {
+        el.className = 'lead-status-select st-' + value;
+      }
+      // Refresh stat counters without a full reload
+      loadLeads();
+    }
+  } catch (e) { /* leave value as user set it; next load will resync */ }
+  el.disabled = false;
 }
 
 async function loadSentEmails() {

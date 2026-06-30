@@ -81,11 +81,11 @@ def run_diagnostics(config, log=_noop):
 # ══════════════════════════════════════════════════════
 def search_businesses(config, log=_noop):
     city = config["TARGET_CITY"]
-    queries = [f"{btype} {city}" for btype in config["BUSINESS_TYPES"]]
+    queries = [(btype, f"{btype} {city}") for btype in config["BUSINESS_TYPES"]]
 
     log(f"Searching for potential clients in {city}...")
     all_biz = {}
-    for query in queries:
+    for btype, query in queries:
         try:
             r = requests.get(
                 "https://maps.googleapis.com/maps/api/place/textsearch/json",
@@ -97,7 +97,8 @@ def search_businesses(config, log=_noop):
                 if pid and pid not in all_biz:
                     all_biz[pid] = {"name": p.get("name",""),
                                     "address": p.get("formatted_address",""),
-                                    "place_id": pid, "website": None, "email": None}
+                                    "place_id": pid, "website": None, "email": None,
+                                    "business_type": btype}
                     new += 1
             token = data.get("next_page_token")
             while token:
@@ -111,7 +112,8 @@ def search_businesses(config, log=_noop):
                     if pid and pid not in all_biz:
                         all_biz[pid] = {"name": p.get("name",""),
                                         "address": p.get("formatted_address",""),
-                                        "place_id": pid, "website": None, "email": None}
+                                        "place_id": pid, "website": None, "email": None,
+                                        "business_type": btype}
                         new += 1
                 token = d2.get("next_page_token")
             log(f"  '{query}' → +{new} ({len(all_biz)} total found)")
@@ -318,6 +320,142 @@ def mark_sent(addr, name="", website="", user_id=None, subject="", body=""):
         })
 
 
+# ══════════════════════════════════════════════════════
+#  LEADS (CRM)
+#  Every business the agent finds gets persisted here, not
+#  just the ones it successfully emails — this is what powers
+#  the CRM dashboard (search, grouping, score, status).
+# ══════════════════════════════════════════════════════
+def compute_match_score(biz, target_business_types=None):
+    """
+    Simple, explainable scoring from data we already have:
+      +40  has a real website
+      +40  has a usable email address
+      +20  business type matches one the user is targeting
+    Capped at 100.
+    """
+    score = 0
+    if biz.get("website"):
+        score += 40
+    if biz.get("email"):
+        score += 40
+    btype = (biz.get("business_type") or "").lower()
+    if target_business_types and btype:
+        targets = [t.strip().lower() for t in target_business_types]
+        if any(t in btype or btype in t for t in targets):
+            score += 20
+    return min(score, 100)
+
+
+def upsert_leads(businesses, config, log=_noop, user_id=None):
+    """
+    Persist every found business as a lead (status='new'), so they
+    survive past this run and show up in the CRM. Re-running the
+    search updates the existing row (same user+email) rather than
+    duplicating it.
+    """
+    sb = _get_supabase()
+    if not (sb and user_id):
+        return
+
+    city = config.get("TARGET_CITY", "")
+    targets = config.get("BUSINESS_TYPES", [])
+    rows = []
+    for biz in businesses:
+        if not biz.get("email"):
+            continue
+        rows.append({
+            "user_id":       user_id,
+            "business_name": biz.get("name", ""),
+            "address":       biz.get("address", ""),
+            "website":       biz.get("website", ""),
+            "email":         biz["email"].lower().strip(),
+            "business_type": biz.get("business_type", ""),
+            "city":          city,
+            "match_score":   compute_match_score(biz, targets),
+        })
+
+    if not rows:
+        return
+
+    try:
+        # upsert on (user_id, email) — requires the unique index from migration.sql
+        sb.table("leads").upsert(rows, on_conflict="user_id,email").execute()
+        log(f"📇 Saved {len(rows)} lead(s) to your CRM.")
+    except Exception as e:
+        log(f"  ⚠️ Could not save leads to CRM: {e}")
+
+
+def mark_lead_contacted(email, user_id=None, subject="", body=""):
+    sb = _get_supabase()
+    if not (sb and user_id):
+        return
+    try:
+        sb.table("leads").update({
+            "status":       "contacted",
+            "subject_sent": subject,
+            "body_sent":    body,
+            "sent_date":    str(datetime.now().date()),
+        }).eq("user_id", user_id).eq("email", email.lower().strip()).execute()
+    except Exception as e:
+        print(f"mark_lead_contacted error: {e}", flush=True)
+
+
+def mark_lead_replied(email, user_id=None, reply_subject=""):
+    sb = _get_supabase()
+    if not (sb and user_id):
+        return
+    try:
+        sb.table("leads").update({
+            "status":        "replied",
+            "replied_at":    datetime.now().isoformat(),
+            "reply_subject": reply_subject,
+        }).eq("user_id", user_id).eq("email", email.lower().strip()).execute()
+    except Exception as e:
+        print(f"mark_lead_replied error: {e}", flush=True)
+
+
+def get_leads(user_id, status=None, group_tag=None, search=None):
+    """Fetch leads for the CRM dashboard, with optional filters."""
+    sb = _get_supabase()
+    if not sb:
+        return []
+    try:
+        q = sb.table("leads").select("*").eq("user_id", user_id)
+        if status:
+            q = q.eq("status", status)
+        if group_tag:
+            q = q.eq("group_tag", group_tag)
+        res = q.order("match_score", desc=True).execute()
+        rows = res.data or []
+        if search:
+            s = search.lower()
+            rows = [r for r in rows if s in (r.get("business_name") or "").lower()
+                    or s in (r.get("email") or "").lower()
+                    or s in (r.get("address") or "").lower()]
+        return rows
+    except Exception as e:
+        print(f"get_leads error: {e}", flush=True)
+        return []
+
+
+def update_lead(lead_id, user_id, fields):
+    """Update a single lead — used for status/group changes from the CRM UI."""
+    sb = _get_supabase()
+    if not sb:
+        return False
+    allowed = {"status", "group_tag"}
+    update = {k: v for k, v in fields.items() if k in allowed}
+    if not update:
+        return False
+    try:
+        sb.table("leads").update(update).eq("id", lead_id).eq("user_id", user_id).execute()
+        return True
+    except Exception as e:
+        print(f"update_lead error: {e}", flush=True)
+        return False
+
+
 def send_one(biz, config, log=_noop, user_id=None):
     if biz["email"] in load_sent(user_id=user_id):
         return False
@@ -364,6 +502,7 @@ def send_one(biz, config, log=_noop, user_id=None):
                       user_id=user_id,
                       subject=subject,
                       body=body)
+            mark_lead_contacted(biz["email"], user_id=user_id, subject=subject, body=body)
         except Exception as me:
             log(f"  ⚠️ Sent but log failed: {me}")
         log(f"  ✅ Sent → {biz['name']} ({biz['email']})")
@@ -438,6 +577,10 @@ def check_replies(config, log=_noop, user_id=None):
 
     log(f"   Checking for replies from {len(contacted)} contacted business(es)...")
 
+    if not config.get("GMAIL_APP_PASSWORD"):
+        log("⚠️  No Gmail App Password on file — add one in Setup to enable reply checking.")
+        return replies
+
     try:
         mail = imaplib.IMAP4_SSL("imap.gmail.com")
         mail.login(config["GMAIL_ADDRESS"], config["GMAIL_APP_PASSWORD"].replace(" ", ""))
@@ -474,6 +617,7 @@ def check_replies(config, log=_noop, user_id=None):
                         "subject": msg.get("Subject", ""),
                         "date":    msg.get("Date", ""),
                     })
+                    mark_lead_replied(sender_addr, user_id=user_id, reply_subject=msg.get("Subject", ""))
                     log(f"  🎉 REPLY → From: {sender_raw} | Subject: {msg.get('Subject','')}")
             except Exception:
                 continue
@@ -502,9 +646,17 @@ def run_full_pipeline(config, log=_noop, user_id=None):
     biz   = search_businesses(config, log=log)
     sites = fetch_websites(biz, config, log=log)
     leads = find_emails(sites, log=log)
+
+    # Persist every found lead (not just the ones we manage to email)
+    # so they show up in the CRM with a match score and status.
+    upsert_leads(leads, config, log=log, user_id=user_id)
+
     sent  = send_all(leads, config, log=log, user_id=user_id)
-    # Reply checking disabled (requires Gmail App Password)
-    log("📭 Reply checking disabled. Check your Gmail inbox manually.")
+
+    if config.get("GMAIL_APP_PASSWORD"):
+        check_replies(config, log=log, user_id=user_id)
+    else:
+        log("📭 Add a Gmail App Password in Setup to enable automatic reply checking.")
 
     log("✅ Run complete!")
     return {"ok": True, "found": len(biz), "with_sites": len(sites),

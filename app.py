@@ -13,6 +13,10 @@ Routes:
   /api/run             kick off the outreach pipeline for this user
   /api/check-replies   check this user's Gmail inbox for replies
   /api/stream          Server-Sent Events log stream for the current run
+  /api/sent_emails     GET — list of emails actually sent
+  /api/leads           GET — CRM lead list, filterable by status/group/search
+  /api/leads/<id>      PATCH — update a lead's status or group tag
+  /api/leads/groups    GET — distinct group tags for the filter dropdown
 """
 
 import os
@@ -225,6 +229,7 @@ def api_get_profile():
         profile["days_left"] = days_left
         profile["trial_active"] = days_left > 0
         profile["is_paid"] = bool(profile.get("is_paid", False))
+        profile["has_gmail_app_password"] = bool(profile.get("gmail_app_password"))
         profile.pop("gmail_app_password", None)  # never send this back to the browser
         return jsonify({"ok": True, "profile": profile})
     except Exception as e:
@@ -240,6 +245,7 @@ def api_save_profile():
     allowed = [
         "full_name", "business_name", "gmail",
         "your_service", "your_about", "target_city", "business_types",
+        "gmail_app_password",
     ]
     update = {k: v for k, v in data.items() if k in allowed}
 
@@ -298,7 +304,7 @@ def _build_config(profile):
         "TARGET_CITY": profile.get("target_city", ""),
         "BUSINESS_TYPES": business_types,
         "GMAIL_ADDRESS": profile.get("gmail", ""),
-        "GMAIL_APP_PASSWORD": "",
+        "GMAIL_APP_PASSWORD": profile.get("gmail_app_password", "") or "",
         "GOOGLE_MAPS_API_KEY": OWNER_GOOGLE_MAPS_API_KEY,
         "MAX_RESULTS_PER_QUERY": 5,
         "DELAY_BETWEEN_EMAILS": 3,
@@ -416,6 +422,51 @@ def api_sent_emails():
         return jsonify({"ok": True, "emails": res.data})
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)})
+
+
+# ══════════════════════════════════════════════════════
+#  LEADS (CRM)
+# ══════════════════════════════════════════════════════
+@app.route("/api/leads", methods=["GET"])
+@login_required
+def api_get_leads():
+    uid = session["user_id"]
+    status = request.args.get("status") or None
+    group_tag = request.args.get("group") or None
+    search = request.args.get("q") or None
+    try:
+        leads = agent_core.get_leads(uid, status=status, group_tag=group_tag, search=search)
+        return jsonify({"ok": True, "leads": leads})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+
+
+@app.route("/api/leads/<lead_id>", methods=["PATCH"])
+@login_required
+def api_update_lead(lead_id):
+    uid = session["user_id"]
+    data = request.get_json(silent=True) or {}
+    try:
+        ok = agent_core.update_lead(lead_id, uid, data)
+        if ok:
+            return jsonify({"ok": True})
+        return jsonify({"ok": False, "message": "No valid fields to update."})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+
+
+@app.route("/api/leads/groups", methods=["GET"])
+@login_required
+def api_lead_groups():
+    """Distinct group tags for this user, so the CRM filter dropdown is populated."""
+    uid = session["user_id"]
+    try:
+        leads = agent_core.get_leads(uid)
+        groups = sorted({l.get("group_tag") or "uncategorized" for l in leads})
+        return jsonify({"ok": True, "groups": groups})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+
 
 @app.route("/api/stream")
 @login_required
