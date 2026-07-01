@@ -537,36 +537,53 @@ def api_log_buffer():
 @login_required
 def api_stream():
     uid = session["user_id"]
-    # Capture uid only — look up state and queue dynamically inside the
-    # generator so we always use the queue that was created by the most
-    # recent /api/run call, not a stale reference from a previous run.
 
     def event_stream():
-        # Wait up to 3s for a run to actually start (handles the race
-        # where the browser connects to /api/stream before /api/run has
-        # had a chance to create the new queue).
-        import time as _time
-        deadline = _time.time() + 3
-        while _time.time() < deadline:
-            if _user_states.get(uid, {}).get("running"):
-                break
-            _time.sleep(0.1)
+        import time as _t
+        # Diagnostic: log every state change to stderr so it shows in Render logs
+        def diag(msg):
+            import sys
+            print(f"[SSE uid={uid[:8]}] {msg}", file=sys.stderr, flush=True)
 
+        diag("stream connected")
+
+        # Wait up to 3s for run to start
+        deadline = _t.time() + 3
+        while _t.time() < deadline:
+            if _user_states.get(uid, {}).get("running"):
+                diag("run detected - starting stream")
+                break
+            _t.sleep(0.05)
+        else:
+            diag("WARNING: no running state found after 3s wait")
+
+        iteration = 0
         while True:
+            iteration += 1
             state = _user_states.get(uid)
             if not state:
+                diag(f"iter {iteration}: no state found, sending keepalive")
                 yield ": keepalive\n\n"
-                import time as _t; _t.sleep(1)
+                _t.sleep(1)
                 continue
+
+            diag(f"iter {iteration}: running={state.get('running')} queue_size={state['log_queue'].qsize()}")
+
             try:
                 line = state["log_queue"].get(timeout=10)
+                diag(f"iter {iteration}: got line = {repr(line[:60])}")
             except queue.Empty:
+                diag(f"iter {iteration}: queue empty after 10s, sending keepalive")
                 yield ": keepalive\n\n"
                 continue
+
             if line == "__DONE__":
+                diag("got __DONE__, closing stream")
                 yield "event: done\ndata: done\n\n"
                 break
             yield f"data: {line}\n\n"
+
+        diag("stream generator exited normally")
 
     return Response(event_stream(), mimetype="text/event-stream",
                     headers={
