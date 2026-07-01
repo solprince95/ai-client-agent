@@ -128,14 +128,19 @@ def search_businesses(config, log=_noop):
 #  STEP 2 — Filter businesses with websites
 # ══════════════════════════════════════════════════════
 def fetch_websites(businesses, config, log=_noop):
-    log("Checking which businesses have a website...")
+    log("Checking each business for a website and phone number...")
     with_sites = []
     for i, biz in enumerate(businesses, 1):
         try:
             r = requests.get("https://maps.googleapis.com/maps/api/place/details/json",
-                             params={"place_id": biz["place_id"], "fields": "website",
+                             params={"place_id": biz["place_id"],
+                                     "fields": "website,formatted_phone_number,international_phone_number",
                                      "key": config["GOOGLE_MAPS_API_KEY"]}, timeout=10)
-            site = r.json().get("result", {}).get("website")
+            result = r.json().get("result", {})
+            site  = result.get("website")
+            phone = result.get("formatted_phone_number") or result.get("international_phone_number")
+            if phone:
+                biz["phone"] = phone
             if site:
                 biz["website"] = site
                 with_sites.append(biz)
@@ -329,16 +334,19 @@ def mark_sent(addr, name="", website="", user_id=None, subject="", body=""):
 def compute_match_score(biz, target_business_types=None):
     """
     Simple, explainable scoring from data we already have:
-      +40  has a real website
-      +40  has a usable email address
+      +35  has a real website
+      +35  has a usable email address
+      +10  has a phone number
       +20  business type matches one the user is targeting
     Capped at 100.
     """
     score = 0
     if biz.get("website"):
-        score += 40
+        score += 35
     if biz.get("email"):
-        score += 40
+        score += 35
+    if biz.get("phone"):
+        score += 10
     btype = (biz.get("business_type") or "").lower()
     if target_business_types and btype:
         targets = [t.strip().lower() for t in target_business_types]
@@ -370,16 +378,27 @@ def upsert_leads(businesses, config, log=_noop, user_id=None):
             "address":       biz.get("address", ""),
             "website":       biz.get("website", ""),
             "email":         biz["email"].lower().strip(),
+            "phone":         biz.get("phone", ""),
             "business_type": biz.get("business_type", ""),
             "city":          city,
             "match_score":   compute_match_score(biz, targets),
+            "status":        "discovered",
         })
 
     if not rows:
         return
 
     try:
-        # upsert on (user_id, email) — requires the unique index from migration.sql
+        # Don't let re-discovery regress a lead that's already past "discovered"
+        # (e.g. already contacted/replied) — only set status for genuinely new rows.
+        emails = [r["email"] for r in rows]
+        existing = sb.table("leads").select("email,status").eq("user_id", user_id).in_("email", emails).execute()
+        existing_status = {r["email"]: r["status"] for r in (existing.data or [])}
+        for row in rows:
+            prior = existing_status.get(row["email"])
+            if prior:
+                row["status"] = prior  # preserve contacted/replied/closed/etc.
+
         sb.table("leads").upsert(rows, on_conflict="user_id,email").execute()
         log(f"📇 Saved {len(rows)} lead(s) to your CRM.")
     except Exception as e:
@@ -638,7 +657,12 @@ def check_replies(config, log=_noop, user_id=None):
 # ══════════════════════════════════════════════════════
 #  FULL PIPELINE
 # ══════════════════════════════════════════════════════
-def run_full_pipeline(config, log=_noop, user_id=None):
+def run_discovery(config, log=_noop, user_id=None):
+    """
+    STEP 1 of 2: find businesses, get their websites/phones/emails, save
+    them all to the leads table as 'discovered'. Sends NO emails.
+    The user picks who to email afterwards, in the Leads tab.
+    """
     if not run_diagnostics(config, log=log):
         log("⛔ Setup incomplete. Fix the issues above in Setup, then run again.")
         return {"ok": False}
@@ -647,8 +671,76 @@ def run_full_pipeline(config, log=_noop, user_id=None):
     sites = fetch_websites(biz, config, log=log)
     leads = find_emails(sites, log=log)
 
-    # Persist every found lead (not just the ones we manage to email)
-    # so they show up in the CRM with a match score and status.
+    upsert_leads(leads, config, log=log, user_id=user_id)
+
+    log(f"✅ Discovery complete — {len(leads)} lead(s) ready for review in the Leads tab.")
+    return {"ok": True, "found": len(biz), "with_sites": len(sites),
+            "with_emails": len(leads)}
+
+
+def send_to_selected_leads(lead_ids, config, log=_noop, user_id=None):
+    """
+    STEP 2 of 2: send AI-personalised emails only to the leads the user
+    explicitly selected in the Leads tab (can be 0, some, or all of them).
+    """
+    sb = _get_supabase()
+    if not (sb and user_id):
+        log("⛔ Could not connect to your account's lead list.")
+        return {"ok": False, "sent": 0}
+
+    if not lead_ids:
+        log("No leads selected — nothing to send.")
+        return {"ok": True, "sent": 0}
+
+    try:
+        res = sb.table("leads").select("*") \
+                .eq("user_id", user_id) \
+                .in_("id", lead_ids) \
+                .execute()
+        rows = res.data or []
+    except Exception as e:
+        log(f"⛔ Could not load selected leads: {e}")
+        return {"ok": False, "sent": 0}
+
+    # Map DB rows back into the dict shape send_all/build_email expect.
+    businesses = []
+    for r in rows:
+        businesses.append({
+            "name":          r.get("business_name", ""),
+            "address":       r.get("address", ""),
+            "website":       r.get("website", ""),
+            "email":         r.get("email", ""),
+            "phone":         r.get("phone", ""),
+            "business_type": r.get("business_type", ""),
+        })
+
+    log(f"Sending personalised emails to {len(businesses)} selected lead(s)...")
+    sent = send_all(businesses, config, log=log, user_id=user_id)
+
+    if config.get("GMAIL_APP_PASSWORD"):
+        check_replies(config, log=log, user_id=user_id)
+    else:
+        log("📭 Add a Gmail App Password in Setup to enable automatic reply checking.")
+
+    log("✅ Send complete!")
+    return {"ok": True, "sent": sent, "selected": len(lead_ids)}
+
+
+def run_full_pipeline(config, log=_noop, user_id=None):
+    """
+    Legacy one-shot pipeline (discover + send everyone immediately).
+    Kept for backward compatibility — the dashboard now uses
+    run_discovery() followed by send_to_selected_leads() instead,
+    so the user can review and choose who gets emailed.
+    """
+    if not run_diagnostics(config, log=log):
+        log("⛔ Setup incomplete. Fix the issues above in Setup, then run again.")
+        return {"ok": False}
+
+    biz   = search_businesses(config, log=log)
+    sites = fetch_websites(biz, config, log=log)
+    leads = find_emails(sites, log=log)
+
     upsert_leads(leads, config, log=log, user_id=user_id)
 
     sent  = send_all(leads, config, log=log, user_id=user_id)

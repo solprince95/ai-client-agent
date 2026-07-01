@@ -10,7 +10,8 @@ Routes:
   /api/auth/logout     log out
   /api/profile         GET/POST — read or save the user's profile
   /api/status          profile completeness + trial/license status
-  /api/run             kick off the outreach pipeline for this user
+  /api/run             discover businesses + save as leads (no sending)
+  /api/send-selected   send AI-personalised emails to chosen lead IDs
   /api/check-replies   check this user's Gmail inbox for replies
   /api/stream          Server-Sent Events log stream for the current run
   /api/sent_emails     GET — list of emails actually sent
@@ -326,6 +327,11 @@ def _check_trial_or_paid(profile):
 @app.route("/api/run", methods=["POST"])
 @login_required
 def api_run():
+    """
+    Discovery only: finds businesses, gets websites/phones/emails, and
+    saves them to the leads table as 'discovered'. Sends NO emails —
+    the user picks who to email from the Leads tab afterwards.
+    """
     uid = session["user_id"]
     state = get_user_state(uid)
 
@@ -349,7 +355,55 @@ def api_run():
             state["log_buffer"].append(msg)
             state["log_queue"].put(msg)
         try:
-            result = agent_core.run_full_pipeline(cfg, log=log, user_id=uid)
+            result = agent_core.run_discovery(cfg, log=log, user_id=uid)
+            state["last_result"] = result
+        except Exception as e:
+            log(f"❌ Unexpected error: {e}")
+        finally:
+            log("__DONE__")
+            state["running"] = False
+
+    state["running"] = True
+    state["log_queue"] = queue.Queue()
+    state["log_buffer"] = []
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/send-selected", methods=["POST"])
+@login_required
+def api_send_selected():
+    """
+    Sends AI-personalised emails only to the lead IDs the user checked
+    in the Leads tab. lead_ids can be an empty list (sends nothing),
+    a subset, or every discovered lead.
+    """
+    uid = session["user_id"]
+    state = get_user_state(uid)
+
+    if state["running"]:
+        return jsonify({"ok": False, "message": "Agent is already running."})
+
+    profile = _get_profile(uid)
+    allowed, msg = _check_trial_or_paid(profile)
+    if not allowed:
+        return jsonify({"ok": False, "message": msg})
+
+    data = request.get_json(silent=True) or {}
+    lead_ids = data.get("lead_ids") or []
+    if not isinstance(lead_ids, list):
+        return jsonify({"ok": False, "message": "lead_ids must be a list."})
+
+    cfg = _build_config(profile)
+
+    def _run():
+        def log(message):
+            msg = str(message)
+            state["log_buffer"].append(msg)
+            state["log_queue"].put(msg)
+        try:
+            result = agent_core.send_to_selected_leads(lead_ids, cfg, log=log, user_id=uid)
             state["last_result"] = result
         except Exception as e:
             log(f"❌ Unexpected error: {e}")

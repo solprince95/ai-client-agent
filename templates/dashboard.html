@@ -75,11 +75,19 @@
   .lead-score-val.lo { color: #c0392b; }
   .lead-score-label { font-size: 0.62rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.03em; }
   .lead-status-select, .lead-group-select { padding: 0.4rem 0.6rem; border: 1.5px solid #dde3ff; border-radius: 6px; font-size: 0.78rem; font-weight: 600; outline: none; cursor: pointer; background: #fff; }
-  .lead-status-select.st-new { color: #555; }
+  .lead-status-select.st-new,
+  .lead-status-select.st-discovered { color: #555; }
   .lead-status-select.st-contacted { color: #1a56db; }
   .lead-status-select.st-replied { color: #27ae60; }
   .lead-status-select.st-closed { color: #888; }
   .lead-status-select.st-unsubscribed { color: #c0392b; }
+  .crm-select-bar { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.85rem; flex-wrap: wrap; }
+  .crm-select-all { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: #444; font-weight: 600; cursor: pointer; }
+  .crm-select-all input { width: 16px; height: 16px; cursor: pointer; }
+  .send-selected-btn { margin-left: auto; background: #1a56db; color: #fff; border: none; padding: 0.6rem 1.2rem; border-radius: 8px; font-size: 0.85rem; font-weight: 700; cursor: pointer; }
+  .send-selected-btn:disabled { background: #ccc; cursor: not-allowed; }
+  .lead-checkbox { width: 17px; height: 17px; cursor: pointer; flex-shrink: 0; }
+  .lead-phone { font-family: monospace; }
 </style>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-2RWLQ2LHCL"></script>
 <script>
@@ -112,8 +120,12 @@
       <h3>Agent Status</h3>
       <p id="status-msg" style="color:#555;margin-bottom:1rem;font-size:0.9rem;">Loading...</p>
       <div class="run-section">
-        <button class="run-btn" id="run-btn" onclick="runAgent()" disabled>▶ Run Agent</button>
+        <button class="run-btn" id="run-btn" onclick="runAgent()" disabled>▶ Find Businesses</button>
         <p class="run-note" id="run-note">Complete your profile in Setup first.</p>
+        <p style="font-size:0.82rem;color:#888;margin-top:0.6rem;max-width:440px;">
+          This finds businesses, their email and phone number — it does <strong>not</strong> send anything yet.
+          Review and pick who to email in the <strong>Leads</strong> tab afterwards.
+        </p>
       </div>
       <div id="log-box"></div>
     </div>
@@ -123,20 +135,20 @@
   <div class="tab-content" id="tab-leads">
     <div class="card">
       <h3> Your CRM</h3>
-      <p style="font-size:0.85rem;color:#888;margin-bottom:1rem;">Every business the agent has found, scored, and tracked through your pipeline.</p>
+      <p style="font-size:0.85rem;color:#888;margin-bottom:1rem;">Every business the agent has found. Select who to email, or manage leads already in your pipeline.</p>
 
       <div class="crm-stats-row">
         <div class="crm-stat"><div class="crm-stat-val" id="crm-total">—</div><div class="crm-stat-label">Total Leads</div></div>
+        <div class="crm-stat"><div class="crm-stat-val" id="crm-discovered">—</div><div class="crm-stat-label">Discovered</div></div>
         <div class="crm-stat"><div class="crm-stat-val" id="crm-contacted">—</div><div class="crm-stat-label">Contacted</div></div>
         <div class="crm-stat"><div class="crm-stat-val" id="crm-replied">—</div><div class="crm-stat-label">Replied</div></div>
-        <div class="crm-stat"><div class="crm-stat-val" id="crm-closed">—</div><div class="crm-stat-label">Closed</div></div>
       </div>
 
       <div class="crm-toolbar">
         <input type="text" class="crm-search" id="crm-search" placeholder="Search name, email, or address..." oninput="debouncedLoadLeads()"/>
         <select class="crm-select" id="crm-status-filter" onchange="loadLeads()">
           <option value="">All statuses</option>
-          <option value="new">New</option>
+          <option value="discovered">Discovered</option>
           <option value="contacted">Contacted</option>
           <option value="replied">Replied</option>
           <option value="closed">Closed</option>
@@ -145,6 +157,15 @@
         <select class="crm-select" id="crm-group-filter" onchange="loadLeads()">
           <option value="">All groups</option>
         </select>
+      </div>
+
+      <div class="crm-select-bar">
+        <label class="crm-select-all">
+          <input type="checkbox" id="select-all-leads" onchange="toggleSelectAll(this)"/>
+          Select all visible
+        </label>
+        <span id="selected-count" style="font-size:0.82rem;color:#888;">0 selected</span>
+        <button class="send-selected-btn" id="send-selected-btn" onclick="sendToSelected()" disabled>✉ Send Emails to Selected</button>
       </div>
 
       <div id="lead-list" class="lead-list">
@@ -263,7 +284,7 @@ async function loadStatus() {
   if (!data.profile_complete) { msg.textContent=' Profile incomplete. Go to Setup tab.'; note.textContent='Complete your profile in Setup first.'; btn.disabled=true; }
   else if (!data.is_paid && data.days_left<=0) { msg.textContent=' Trial ended. Upgrade in Billing tab.'; btn.disabled=true; }
   else if (data.running) { msg.textContent=' Agent is running...'; btn.disabled=true; btn.textContent=' Running...'; }
-  else { msg.textContent=' Ready to run.'; btn.disabled=false; btn.textContent='▶ Run Agent'; note.textContent=`${data.days_left} trial day${data.days_left===1?'':'s'} remaining.`; }
+  else { msg.textContent=' Ready to run.'; btn.disabled=false; btn.textContent='▶ Find Businesses'; note.textContent=`${data.days_left} trial day${data.days_left===1?'':'s'} remaining.`; }
 }
 
 async function saveProfile() {
@@ -308,6 +329,8 @@ async function saveProfile() {
 
 // ── LEADS / CRM ──────────────────────────────────────
 let _crmDebounce;
+let selectedLeadIds = new Set();
+
 function debouncedLoadLeads() {
   clearTimeout(_crmDebounce);
   _crmDebounce = setTimeout(loadLeads, 350);
@@ -332,6 +355,26 @@ async function loadLeadGroups() {
   } catch (e) { /* non-fatal */ }
 }
 
+function updateSelectedCount() {
+  const n = selectedLeadIds.size;
+  document.getElementById('selected-count').textContent = n + ' selected';
+  document.getElementById('send-selected-btn').disabled = (n === 0);
+}
+
+function toggleLeadSelected(id, checked) {
+  if (checked) selectedLeadIds.add(id); else selectedLeadIds.delete(id);
+  updateSelectedCount();
+}
+
+function toggleSelectAll(checkboxEl) {
+  document.querySelectorAll('.lead-checkbox').forEach(cb => {
+    cb.checked = checkboxEl.checked;
+    if (checkboxEl.checked) selectedLeadIds.add(cb.dataset.leadId);
+    else selectedLeadIds.delete(cb.dataset.leadId);
+  });
+  updateSelectedCount();
+}
+
 async function loadLeads() {
   const container = document.getElementById('lead-list');
   const search = document.getElementById('crm-search').value.trim();
@@ -350,27 +393,37 @@ async function loadLeads() {
 
     const leads = data.leads || [];
     document.getElementById('crm-total').textContent = leads.length;
+    document.getElementById('crm-discovered').textContent = leads.filter(l => l.status === 'discovered').length;
     document.getElementById('crm-contacted').textContent = leads.filter(l => l.status === 'contacted').length;
     document.getElementById('crm-replied').textContent = leads.filter(l => l.status === 'replied').length;
-    document.getElementById('crm-closed').textContent = leads.filter(l => l.status === 'closed').length;
+
+    // Drop selections for leads no longer visible (filtered out / sent already)
+    const visibleIds = new Set(leads.map(l => l.id));
+    selectedLeadIds.forEach(id => { if (!visibleIds.has(id)) selectedLeadIds.delete(id); });
 
     if (leads.length === 0) {
-      container.innerHTML = '<div class="sent-empty">No leads yet. Run the agent to start building your CRM.</div>';
+      container.innerHTML = '<div class="sent-empty">No leads yet. Click "Find Businesses" on the Run Agent tab to start building your CRM.</div>';
+      document.getElementById('select-all-leads').checked = false;
+      updateSelectedCount();
       return;
     }
 
     container.innerHTML = leads.map(l => `
       <div class="lead-card">
+        <input type="checkbox" class="lead-checkbox" data-lead-id="${l.id}"
+               ${selectedLeadIds.has(l.id) ? 'checked' : ''}
+               ${l.status !== 'discovered' ? 'disabled title="Already contacted"' : ''}
+               onchange="toggleLeadSelected('${l.id}', this.checked)"/>
         <div class="lead-score">
           <div class="lead-score-val ${scoreClass(l.match_score||0)}">${l.match_score||0}</div>
           <div class="lead-score-label">Match</div>
         </div>
         <div class="lead-main">
           <div class="lead-name">${l.business_name || 'Unknown'}</div>
-          <div class="lead-sub">${l.email || ''}${l.city ? ' · ' + l.city : ''}${l.business_type ? ' · ' + l.business_type : ''}</div>
+          <div class="lead-sub">${l.email || ''}${l.phone ? ' · <span class="lead-phone">'+l.phone+'</span>' : ''}${l.city ? ' · ' + l.city : ''}</div>
         </div>
         <select class="lead-status-select st-${l.status}" onchange="updateLeadField('${l.id}', 'status', this.value, this)">
-          <option value="new" ${l.status==='new'?'selected':''}>New</option>
+          <option value="discovered" ${l.status==='discovered'?'selected':''}>Discovered</option>
           <option value="contacted" ${l.status==='contacted'?'selected':''}>Contacted</option>
           <option value="replied" ${l.status==='replied'?'selected':''}>Replied</option>
           <option value="closed" ${l.status==='closed'?'selected':''}>Closed</option>
@@ -382,8 +435,40 @@ async function loadLeads() {
         </select>
       </div>
     `).join('');
+
+    updateSelectedCount();
   } catch (err) {
     container.innerHTML = '<div class="sent-empty">Error loading leads.</div>';
+  }
+}
+
+async function sendToSelected() {
+  const ids = Array.from(selectedLeadIds);
+  if (ids.length === 0) return;
+  const btn = document.getElementById('send-selected-btn');
+  if (!confirm(`Send a personalised email to ${ids.length} selected business${ids.length===1?'':'es'}?`)) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  try {
+    const res = await fetch('/api/send-selected', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ lead_ids: ids })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      alert(data.message || 'Could not start sending.');
+      btn.disabled = false; btn.textContent = '✉ Send Emails to Selected';
+      return;
+    }
+    selectedLeadIds.clear();
+    // Switch to Run Agent tab so the user can watch the live log,
+    // since sending reuses the same SSE log stream as discovery.
+    switchTab('run');
+    startLogStream();
+  } catch (e) {
+    alert('Network error. Please try again.');
+    btn.disabled = false; btn.textContent = '✉ Send Emails to Selected';
   }
 }
 
@@ -399,7 +484,6 @@ async function updateLeadField(leadId, field, value, el) {
       if (field === 'status') {
         el.className = 'lead-status-select st-' + value;
       }
-      // Refresh stat counters without a full reload
       loadLeads();
     }
   } catch (e) { /* leave value as user set it; next load will resync */ }
@@ -450,15 +534,28 @@ let _streaming = false;
 async function runAgent() {
   const btn = document.getElementById('run-btn');
   const logBox = document.getElementById('log-box');
-  btn.disabled=true; btn.textContent=' Starting...';
+  btn.disabled=true; btn.textContent=' Searching...';
   logBox.style.display='block'; logBox.textContent='';
   const res = await fetch('/api/run',{method:'POST'});
   const data = await res.json();
-  if (!data.ok) { logBox.textContent='❌ '+data.message; btn.disabled=false; btn.textContent='▶ Run Agent'; return; }
+  if (!data.ok) { logBox.textContent='❌ '+data.message; btn.disabled=false; btn.textContent='▶ Find Businesses'; return; }
   clearInterval(_pollInterval);
   _streaming = false;
+  _runMode = 'discover';
   connectStream();
 }
+
+// Called by sendToSelected() after posting to /api/send-selected
+function startLogStream() {
+  const logBox = document.getElementById('log-box');
+  logBox.style.display='block'; logBox.textContent='';
+  clearInterval(_pollInterval);
+  _streaming = false;
+  _runMode = 'send';
+  connectStream();
+}
+
+let _runMode = 'discover'; // 'discover' | 'send'
 
 function connectStream() {
   if (_streaming) return;
@@ -467,16 +564,25 @@ function connectStream() {
   const logBox = document.getElementById('log-box');
   const evtSource = new EventSource('/api/stream');
   evtSource.onmessage = (e) => {
-    btn.disabled=true; btn.textContent=' Running...';
+    btn.disabled=true;
+    btn.textContent=_runMode==='send' ? ' Sending...' : ' Searching...';
     if(e.data){ logBox.textContent+=e.data+'\n'; logBox.scrollTop=logBox.scrollHeight; }
   };
   evtSource.addEventListener('done',()=>{
     evtSource.close();
     _streaming = false;
     btn.disabled=false;
-    btn.textContent='▶ Run Agent';
+    btn.textContent='▶ Find Businesses';
     _pollInterval = setInterval(loadStatus, 10000);
     loadStatus();
+    // After discovery, take the user straight to Leads to review results.
+    // After send, reload Leads to show updated statuses.
+    setTimeout(() => {
+      loadLeadGroups();
+      loadLeads();
+      if (_runMode === 'discover') switchTab('leads');
+    }, 600);
+    _runMode = 'discover';
   });
   evtSource.onerror = () => {
     evtSource.close();
@@ -489,7 +595,7 @@ function connectStream() {
         connectStream();
       } else {
         btn.disabled=false;
-        btn.textContent='▶ Run Agent';
+        btn.textContent='▶ Find Businesses';
         _pollInterval = setInterval(loadStatus, 10000);
         loadStatus();
       }
