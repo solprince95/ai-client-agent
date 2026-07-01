@@ -157,33 +157,62 @@ def fetch_websites(businesses, config, log=_noop):
 #  STEP 3 — Extract emails from websites
 # ══════════════════════════════════════════════════════
 def extract_email(site_url):
-    headers  = {"User-Agent": "Mozilla/5.0"}
-    to_check = [site_url]
-    found    = set()
-    try:
-        r    = requests.get(site_url, headers=headers, timeout=8, allow_redirects=True)
-        soup = BeautifulSoup(r.text, "html.parser")
-        for a in soup.find_all("a", href=True):
-            h = a["href"]
-            if h.startswith("mailto:"):
-                found.add(h.replace("mailto:","").split("?")[0].lower())
-            elif any(k in h.lower() for k in ["contact","about","reach","connect"]):
-                full = urljoin(site_url, h)
-                if urlparse(full).netloc == urlparse(site_url).netloc:
-                    to_check.append(full)
-    except Exception:
-        pass
-    for url in to_check[:4]:
+    """
+    Try to find a contact email on a website.
+    Hard-capped at 10 s per site via a thread so one slow/hung
+    site can never block the whole pipeline.
+    """
+    import concurrent.futures
+    def _scrape():
+        headers = {"User-Agent": "Mozilla/5.0"}
+        found   = set()
+        extra_pages = []
+
+        # Homepage pass — collect mailto links and candidate inner pages
         try:
-            r = requests.get(url, headers=headers, timeout=8, allow_redirects=True)
+            r = requests.get(site_url, headers=headers, timeout=6, allow_redirects=True)
+            # Scan raw text first (fastest)
             for e in EMAIL_RE.findall(r.text):
                 if not any(s in e.lower() for s in SKIP_WORDS):
                     found.add(e.lower())
+            # Also check mailto hrefs and find contact/about pages
+            soup = BeautifulSoup(r.text, "html.parser")
+            for a in soup.find_all("a", href=True):
+                h = a["href"]
+                if h.startswith("mailto:"):
+                    found.add(h.replace("mailto:", "").split("?")[0].lower())
+                elif any(k in h.lower() for k in ["contact", "about", "reach", "connect"]):
+                    full = urljoin(site_url, h)
+                    if urlparse(full).netloc == urlparse(site_url).netloc and full != site_url:
+                        extra_pages.append(full)
         except Exception:
             pass
-        time.sleep(0.1)
-    clean = [e for e in found if "noreply" not in e and "no-reply" not in e]
-    return clean[0] if clean else (list(found)[0] if found else None)
+
+        # If homepage already gave us an email, return early
+        clean = [e for e in found if "noreply" not in e and "no-reply" not in e]
+        if clean:
+            return clean[0]
+
+        # Check up to 2 extra inner pages (contact/about)
+        for url in extra_pages[:2]:
+            try:
+                r = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+                for e in EMAIL_RE.findall(r.text):
+                    if not any(s in e.lower() for s in SKIP_WORDS):
+                        found.add(e.lower())
+            except Exception:
+                pass
+
+        clean = [e for e in found if "noreply" not in e and "no-reply" not in e]
+        return clean[0] if clean else (list(found)[0] if found else None)
+
+    # Hard 10-second wall-clock cap so one hung site can't stall the loop
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            future = ex.submit(_scrape)
+            return future.result(timeout=10)
+    except Exception:
+        return None
 
 
 def find_emails(businesses, log=_noop):
@@ -194,9 +223,8 @@ def find_emails(businesses, log=_noop):
         if em:
             biz["email"] = em
             with_emails.append(biz)
-        if i % 5 == 0 or i == len(businesses):
-            log(f"  Checked {i}/{len(businesses)} — {len(with_emails)} emails found so far")
-        time.sleep(0.2)
+        # Log every site so the user knows it's still alive
+        log(f"  [{i}/{len(businesses)}] {biz.get('name','?')[:35]} → {'✅ ' + em if em else '— no email'}")
     log(f"{len(with_emails)} businesses with usable email addresses.")
     return with_emails
 
