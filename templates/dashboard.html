@@ -603,7 +603,11 @@ function connectStream() {
           try {
             const br  = await fetch('/api/log-buffer');
             const bd  = await br.json();
-            if (bd.ok && bd.log) logBox.textContent = bd.log.join('\n');
+            if (bd.ok && bd.log && bd.log.length) {
+              logBox.style.display = 'block';
+              logBox.textContent = bd.log.join('\n');
+              logBox.scrollTop = logBox.scrollHeight;
+            }
           } catch(e) {}
           btn.disabled = false;
           btn.textContent = '▶ Find Businesses';

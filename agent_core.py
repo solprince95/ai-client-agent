@@ -179,23 +179,26 @@ def _should_skip(url):
         return False
 
 
-def _fetch_text(url, max_bytes=60_000):
+def _fetch_text(url, max_bytes=60_000, site_deadline=None):
     """
-    Fetch URL text with:
-    - (3s connect, 5s read) timeout tuple — covers stalled SSL/DNS too
-    - 60 KB body cap via stream=True — stops slow-drip bodies
-    Both are needed: timeout covers connection phase,
-    byte cap covers the body phase.
+    Fetch URL text with hard limits on every axis:
+    - 3s connect timeout
+    - 4s read timeout per chunk
+    - 60 KB body cap
+    - wall-clock site_deadline: if set, stops reading once time.time() > deadline
+    Any single site is therefore capped at ~8s total regardless of chunk speed.
     """
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
         with requests.get(url, headers=headers,
-                          timeout=(3, 5),          # (connect, read-per-chunk)
+                          timeout=(3, 4),
                           allow_redirects=True,
                           stream=True) as r:
             chunks = []
             total  = 0
-            for chunk in r.iter_content(chunk_size=4096):
+            for chunk in r.iter_content(chunk_size=8192):
+                if site_deadline and time.time() > site_deadline:
+                    break
                 chunks.append(chunk)
                 total += len(chunk)
                 if total >= max_bytes:
@@ -209,11 +212,14 @@ def extract_email(site_url):
     if _should_skip(site_url):
         return None
 
+    # Hard 8-second wall-clock limit for this entire site (all pages combined)
+    site_deadline = time.time() + 8
+
     found       = set()
     extra_pages = []
 
     # Homepage pass
-    text = _fetch_text(site_url)
+    text = _fetch_text(site_url, site_deadline=site_deadline)
     if text:
         for e in EMAIL_RE.findall(text):
             if not any(s in e.lower() for s in SKIP_WORDS):
@@ -232,9 +238,11 @@ def extract_email(site_url):
     if clean:
         return clean[0]
 
-    # Check up to 2 inner contact/about pages
+    # Check up to 2 inner contact/about pages — only if time budget remains
     for url in extra_pages[:2]:
-        text = _fetch_text(url)
+        if time.time() > site_deadline:
+            break
+        text = _fetch_text(url, site_deadline=site_deadline)
         for e in EMAIL_RE.findall(text):
             if not any(s in e.lower() for s in SKIP_WORDS):
                 found.add(e.lower())
@@ -246,10 +254,10 @@ def extract_email(site_url):
 def find_emails(businesses, log=_noop):
     log("Looking for contact emails on each website...")
     with_emails = []
-    deadline = time.time() + 240  # 4-minute global budget for the whole step
+    global_deadline = time.time() + 240  # 4-min safety net for whole step
 
     for i, biz in enumerate(businesses, 1):
-        if time.time() > deadline:
+        if time.time() > global_deadline:
             log(f"  ⏱ Time limit reached — skipping remaining {len(businesses)-i+1} site(s).")
             break
 
