@@ -537,16 +537,30 @@ def api_log_buffer():
 @login_required
 def api_stream():
     uid = session["user_id"]
-    state = get_user_state(uid)
+    # Capture uid only — look up state and queue dynamically inside the
+    # generator so we always use the queue that was created by the most
+    # recent /api/run call, not a stale reference from a previous run.
 
     def event_stream():
-        q = state["log_queue"]
+        # Wait up to 3s for a run to actually start (handles the race
+        # where the browser connects to /api/stream before /api/run has
+        # had a chance to create the new queue).
+        import time as _time
+        deadline = _time.time() + 3
+        while _time.time() < deadline:
+            if _user_states.get(uid, {}).get("running"):
+                break
+            _time.sleep(0.1)
+
         while True:
+            state = _user_states.get(uid)
+            if not state:
+                yield ": keepalive\n\n"
+                import time as _t; _t.sleep(1)
+                continue
             try:
-                # Wait max 10s — well under Render's 30s idle-connection kill
-                line = q.get(timeout=10)
+                line = state["log_queue"].get(timeout=10)
             except queue.Empty:
-                # Send a comment-style keepalive (ignored by browser, keeps TCP alive)
                 yield ": keepalive\n\n"
                 continue
             if line == "__DONE__":
@@ -557,7 +571,7 @@ def api_stream():
     return Response(event_stream(), mimetype="text/event-stream",
                     headers={
                         "Cache-Control": "no-cache",
-                        "X-Accel-Buffering": "no",  # disables Nginx/proxy buffering on Render
+                        "X-Accel-Buffering": "no",
                     })
 
 
