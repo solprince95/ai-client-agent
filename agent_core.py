@@ -156,63 +156,68 @@ def fetch_websites(businesses, config, log=_noop):
 # ══════════════════════════════════════════════════════
 #  STEP 3 — Extract emails from websites
 # ══════════════════════════════════════════════════════
+def _fetch_text(url, max_bytes=80_000, timeout=6):
+    """
+    Fetch URL text with a hard byte cap (80 KB default).
+    stream=True means we stop reading the body once we hit max_bytes,
+    so slow-drip responses can never block the loop indefinitely —
+    requests timeout= only covers socket inactivity, not total body time.
+    """
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        with requests.get(url, headers=headers, timeout=timeout,
+                          allow_redirects=True, stream=True) as r:
+            chunks = []
+            total  = 0
+            for chunk in r.iter_content(chunk_size=8192):
+                chunks.append(chunk)
+                total += len(chunk)
+                if total >= max_bytes:
+                    break
+            return b"".join(chunks).decode("utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+
 def extract_email(site_url):
     """
     Try to find a contact email on a website.
-    Hard-capped at 10 s per site via a thread so one slow/hung
-    site can never block the whole pipeline.
+    Uses _fetch_text (stream + byte cap) so slow/hung sites
+    can never stall the pipeline.
     """
-    import concurrent.futures
-    def _scrape():
-        headers = {"User-Agent": "Mozilla/5.0"}
-        found   = set()
-        extra_pages = []
+    found       = set()
+    extra_pages = []
 
-        # Homepage pass — collect mailto links and candidate inner pages
-        try:
-            r = requests.get(site_url, headers=headers, timeout=6, allow_redirects=True)
-            # Scan raw text first (fastest)
-            for e in EMAIL_RE.findall(r.text):
-                if not any(s in e.lower() for s in SKIP_WORDS):
-                    found.add(e.lower())
-            # Also check mailto hrefs and find contact/about pages
-            soup = BeautifulSoup(r.text, "html.parser")
-            for a in soup.find_all("a", href=True):
-                h = a["href"]
-                if h.startswith("mailto:"):
-                    found.add(h.replace("mailto:", "").split("?")[0].lower())
-                elif any(k in h.lower() for k in ["contact", "about", "reach", "connect"]):
-                    full = urljoin(site_url, h)
-                    if urlparse(full).netloc == urlparse(site_url).netloc and full != site_url:
-                        extra_pages.append(full)
-        except Exception:
-            pass
+    # Homepage pass
+    text = _fetch_text(site_url)
+    if text:
+        for e in EMAIL_RE.findall(text):
+            if not any(s in e.lower() for s in SKIP_WORDS):
+                found.add(e.lower())
+        soup = BeautifulSoup(text, "html.parser")
+        for a in soup.find_all("a", href=True):
+            h = a["href"]
+            if h.startswith("mailto:"):
+                found.add(h.replace("mailto:", "").split("?")[0].lower())
+            elif any(k in h.lower() for k in ["contact", "about", "reach", "connect"]):
+                full = urljoin(site_url, h)
+                if urlparse(full).netloc == urlparse(site_url).netloc and full != site_url:
+                    extra_pages.append(full)
 
-        # If homepage already gave us an email, return early
-        clean = [e for e in found if "noreply" not in e and "no-reply" not in e]
-        if clean:
-            return clean[0]
+    # Return early if homepage already has a clean email
+    clean = [e for e in found if "noreply" not in e and "no-reply" not in e]
+    if clean:
+        return clean[0]
 
-        # Check up to 2 extra inner pages (contact/about)
-        for url in extra_pages[:2]:
-            try:
-                r = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
-                for e in EMAIL_RE.findall(r.text):
-                    if not any(s in e.lower() for s in SKIP_WORDS):
-                        found.add(e.lower())
-            except Exception:
-                pass
+    # Check up to 2 inner contact/about pages
+    for url in extra_pages[:2]:
+        text = _fetch_text(url, timeout=5)
+        for e in EMAIL_RE.findall(text):
+            if not any(s in e.lower() for s in SKIP_WORDS):
+                found.add(e.lower())
 
-        clean = [e for e in found if "noreply" not in e and "no-reply" not in e]
-        return clean[0] if clean else (list(found)[0] if found else None)
-
-    # Hard 10-second wall-clock cap so one hung site can't stall the loop
-    try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-            future = ex.submit(_scrape)
-            return future.result(timeout=10)
-    except Exception:
-        return None
+    clean = [e for e in found if "noreply" not in e and "no-reply" not in e]
+    return clean[0] if clean else (list(found)[0] if found else None)
 
 
 def find_emails(businesses, log=_noop):
@@ -223,7 +228,6 @@ def find_emails(businesses, log=_noop):
         if em:
             biz["email"] = em
             with_emails.append(biz)
-        # Log every site so the user knows it's still alive
         log(f"  [{i}/{len(businesses)}] {biz.get('name','?')[:35]} → {'✅ ' + em if em else '— no email'}")
     log(f"{len(with_emails)} businesses with usable email addresses.")
     return with_emails
