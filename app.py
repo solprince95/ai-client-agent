@@ -533,63 +533,37 @@ def api_log_buffer():
                     "running": state.get("running", False)})
 
 
-@app.route("/api/stream")
+@app.route("/api/poll")
 @login_required
-def api_stream():
+def api_poll():
+    """
+    Replaces SSE. The browser calls this every second while a run is active.
+    Returns all log lines queued since the last poll, plus running/done status.
+    Never blocks — drains the queue instantly and returns.
+    This avoids the gunicorn gthread watchdog killing blocked threads.
+    """
     uid = session["user_id"]
+    state = get_user_state(uid)
+    q = state["log_queue"]
 
-    def event_stream():
-        import time as _t
-        # Diagnostic: log every state change to stderr so it shows in Render logs
-        def diag(msg):
-            import sys
-            print(f"[SSE uid={uid[:8]}] {msg}", file=sys.stderr, flush=True)
-
-        diag("stream connected")
-
-        # Wait up to 3s for run to start
-        deadline = _t.time() + 3
-        while _t.time() < deadline:
-            if _user_states.get(uid, {}).get("running"):
-                diag("run detected - starting stream")
-                break
-            _t.sleep(0.05)
-        else:
-            diag("WARNING: no running state found after 3s wait")
-
-        iteration = 0
-        while True:
-            iteration += 1
-            state = _user_states.get(uid)
-            if not state:
-                diag(f"iter {iteration}: no state found, sending keepalive")
-                yield ": keepalive\n\n"
-                _t.sleep(1)
-                continue
-
-            diag(f"iter {iteration}: running={state.get('running')} queue_size={state['log_queue'].qsize()}")
-
-            try:
-                line = state["log_queue"].get(timeout=10)
-                diag(f"iter {iteration}: got line = {repr(line[:60])}")
-            except queue.Empty:
-                diag(f"iter {iteration}: queue empty after 10s, sending keepalive")
-                yield ": keepalive\n\n"
-                continue
-
+    lines = []
+    done  = False
+    while True:
+        try:
+            line = q.get_nowait()
             if line == "__DONE__":
-                diag("got __DONE__, closing stream")
-                yield "event: done\ndata: done\n\n"
+                done = True
                 break
-            yield f"data: {line}\n\n"
+            lines.append(line)
+        except queue.Empty:
+            break
 
-        diag("stream generator exited normally")
-
-    return Response(event_stream(), mimetype="text/event-stream",
-                    headers={
-                        "Cache-Control": "no-cache",
-                        "X-Accel-Buffering": "no",
-                    })
+    return jsonify({
+        "ok":      True,
+        "lines":   lines,
+        "running": state.get("running", False),
+        "done":    done,
+    })
 
 
 # ══════════════════════════════════════════════════════

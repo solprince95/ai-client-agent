@@ -529,104 +529,75 @@ function toggleEmail(i) {
   toggle.textContent = isOpen ? '▲ Hide Email' : '▼ View Email';
 }
 
-let _streaming = false;
+let _pollInterval = null;
+
+let _runMode = 'discover';
+let _pollTimer = null;
 
 async function runAgent() {
-  const btn = document.getElementById('run-btn');
+  const btn    = document.getElementById('run-btn');
   const logBox = document.getElementById('log-box');
-  btn.disabled=true; btn.textContent=' Searching...';
-  logBox.style.display='block'; logBox.textContent='';
-  const res = await fetch('/api/run',{method:'POST'});
+  btn.disabled = true; btn.textContent = ' Searching...';
+  logBox.style.display = 'block'; logBox.textContent = '';
+  const res  = await fetch('/api/run', {method: 'POST'});
   const data = await res.json();
-  if (!data.ok) { logBox.textContent='❌ '+data.message; btn.disabled=false; btn.textContent='▶ Find Businesses'; return; }
-  clearInterval(_pollInterval);
-  _streaming = false;
+  if (!data.ok) {
+    logBox.textContent = '❌ ' + data.message;
+    btn.disabled = false; btn.textContent = '▶ Find Businesses';
+    return;
+  }
   _runMode = 'discover';
-  connectStream();
+  startPolling();
 }
 
-// Called by sendToSelected() after posting to /api/send-selected
 function startLogStream() {
   const logBox = document.getElementById('log-box');
-  logBox.style.display='block'; logBox.textContent='';
-  clearInterval(_pollInterval);
-  _streaming = false;
+  logBox.style.display = 'block'; logBox.textContent = '';
   _runMode = 'send';
-  connectStream();
+  startPolling();
 }
 
-let _runMode = 'discover'; // 'discover' | 'send'
-
-function connectStream() {
-  if (_streaming) return;
-  _streaming = true;
-  const btn = document.getElementById('run-btn');
+function startPolling() {
+  clearInterval(_pollTimer);
+  clearInterval(_pollInterval);
+  const btn    = document.getElementById('run-btn');
   const logBox = document.getElementById('log-box');
-  const evtSource = new EventSource('/api/stream');
-  evtSource.onmessage = (e) => {
-    btn.disabled=true;
-    btn.textContent=_runMode==='send' ? ' Sending...' : ' Searching...';
-    if(e.data){ logBox.textContent+=e.data+'\n'; logBox.scrollTop=logBox.scrollHeight; }
-  };
-  evtSource.addEventListener('done',()=>{
-    evtSource.close();
-    _streaming = false;
-    btn.disabled=false;
-    btn.textContent='▶ Find Businesses';
-    _pollInterval = setInterval(loadStatus, 10000);
-    loadStatus();
-    // After discovery, take the user straight to Leads to review results.
-    // After send, reload Leads to show updated statuses.
-    setTimeout(() => {
-      loadLeadGroups();
-      loadLeads();
-      if (_runMode === 'discover') switchTab('leads');
-    }, 600);
-    _runMode = 'discover';
-  });
-  evtSource.onerror = () => {
-    evtSource.close();
-    _streaming = false;
-    // Don't give up — check if the agent is still running and reconnect.
-    // Render can drop the SSE connection even with keepalives; we just reattach.
-    setTimeout(async () => {
-      try {
-        const res  = await fetch('/api/status');
-        const data = await res.json();
-        if (data.ok && data.running) {
-          // Agent still going — reconnect to the stream silently
-          logBox.textContent += '\n[Reconnecting to log stream...]\n';
-          connectStream();
-        } else {
-          // Agent finished (or errored) while we were disconnected —
-          // replay the buffered log so the user sees what happened
-          try {
-            const br  = await fetch('/api/log-buffer');
-            const bd  = await br.json();
-            if (bd.ok && bd.log && bd.log.length) {
-              logBox.style.display = 'block';
-              logBox.textContent = bd.log.join('\n');
-              logBox.scrollTop = logBox.scrollHeight;
-            }
-          } catch(e) {}
-          btn.disabled = false;
-          btn.textContent = '▶ Find Businesses';
-          _pollInterval = setInterval(loadStatus, 10000);
-          loadStatus();
-          setTimeout(() => { loadLeadGroups(); loadLeads(); if (_runMode==='discover') switchTab('leads'); }, 800);
-          _runMode = 'discover';
-        }
-      } catch(e) {
-        // Network totally down — retry after 5s
-        setTimeout(connectStream, 5000);
+
+  _pollTimer = setInterval(async () => {
+    try {
+      const res  = await fetch('/api/poll');
+      const data = await res.json();
+      if (!data.ok) return;
+
+      // Append new lines
+      if (data.lines && data.lines.length) {
+        logBox.textContent += data.lines.join('\n') + '\n';
+        logBox.scrollTop = logBox.scrollHeight;
+        btn.textContent = _runMode === 'send' ? ' Sending...' : ' Searching...';
       }
-    }, 2000);
-  };
+
+      if (data.done || (!data.running && !data.lines.length)) {
+        clearInterval(_pollTimer);
+        btn.disabled = false;
+        btn.textContent = '▶ Find Businesses';
+        _pollInterval = setInterval(loadStatus, 10000);
+        loadStatus();
+        setTimeout(() => {
+          loadLeadGroups();
+          loadLeads();
+          if (_runMode === 'discover') switchTab('leads');
+          _runMode = 'discover';
+        }, 600);
+      }
+    } catch(e) {
+      // Network hiccup — just retry next tick
+    }
+  }, 1000);
 }
 async function logout() { await fetch('/api/auth/logout',{method:'POST'}); window.location.href='/'; }
 loadProfile();
 loadStatus();
-let _pollInterval = setInterval(loadStatus, 10000);
+setInterval(loadStatus, 10000);
 </script>
 </body>
 </html>
