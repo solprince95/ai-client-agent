@@ -463,18 +463,39 @@ def upsert_leads(businesses, config, log=_noop, user_id=None):
         return
 
     try:
-        # Don't let re-discovery regress a lead that's already past "discovered"
-        # (e.g. already contacted/replied) — only set status for genuinely new rows.
+        # Fetch existing lead emails for this user so we can decide
+        # insert vs update without relying on upsert/on_conflict syntax
+        # (which varies across supabase-py versions).
         emails = [r["email"] for r in rows]
-        existing = sb.table("leads").select("email,status").eq("user_id", user_id).in_("email", emails).execute()
-        existing_status = {r["email"]: r["status"] for r in (existing.data or [])}
-        for row in rows:
-            prior = existing_status.get(row["email"])
-            if prior:
-                row["status"] = prior  # preserve contacted/replied/closed/etc.
+        existing_res = sb.table("leads").select("id,email,status") \
+                         .eq("user_id", user_id).in_("email", emails).execute()
+        existing = {r["email"]: r for r in (existing_res.data or [])}
 
-        sb.table("leads").upsert(rows, on_conflict="user_id,email").execute()
-        log(f"📇 Saved {len(rows)} lead(s) to your CRM.")
+        to_insert = []
+        to_update = []
+        for row in rows:
+            prev = existing.get(row["email"])
+            if prev:
+                # Never regress status of a lead already past discovered
+                if prev["status"] not in ("discovered", None):
+                    row["status"] = prev["status"]
+                to_update.append((prev["id"], {
+                    "website":       row.get("website"),
+                    "phone":         row.get("phone"),
+                    "match_score":   row.get("match_score"),
+                    "status":        row["status"],
+                    "business_type": row.get("business_type"),
+                    "address":       row.get("address"),
+                }))
+            else:
+                to_insert.append(row)
+
+        if to_insert:
+            sb.table("leads").insert(to_insert).execute()
+        for lead_id, fields in to_update:
+            sb.table("leads").update(fields).eq("id", lead_id).execute()
+
+        log(f"📇 Saved {len(to_insert)} new + {len(to_update)} updated lead(s) to your CRM.")
     except Exception as e:
         log(f"  ⚠️ Could not save leads to CRM: {e}")
 
