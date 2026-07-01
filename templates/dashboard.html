@@ -587,19 +587,36 @@ function connectStream() {
   evtSource.onerror = () => {
     evtSource.close();
     _streaming = false;
+    // Don't give up — check if the agent is still running and reconnect.
+    // Render can drop the SSE connection even with keepalives; we just reattach.
     setTimeout(async () => {
-      const res = await fetch('/api/status');
-      const data = await res.json();
-      if (data.ok && data.running) {
-        logBox.textContent += '\n Reconnecting...\n';
-        connectStream();
-      } else {
-        btn.disabled=false;
-        btn.textContent='▶ Find Businesses';
-        _pollInterval = setInterval(loadStatus, 10000);
-        loadStatus();
+      try {
+        const res  = await fetch('/api/status');
+        const data = await res.json();
+        if (data.ok && data.running) {
+          // Agent still going — reconnect to the stream silently
+          logBox.textContent += '\n[Reconnecting to log stream...]\n';
+          connectStream();
+        } else {
+          // Agent finished (or errored) while we were disconnected —
+          // replay the buffered log so the user sees what happened
+          try {
+            const br  = await fetch('/api/log-buffer');
+            const bd  = await br.json();
+            if (bd.ok && bd.log) logBox.textContent = bd.log.join('\n');
+          } catch(e) {}
+          btn.disabled = false;
+          btn.textContent = '▶ Find Businesses';
+          _pollInterval = setInterval(loadStatus, 10000);
+          loadStatus();
+          setTimeout(() => { loadLeadGroups(); loadLeads(); if (_runMode==='discover') switchTab('leads'); }, 800);
+          _runMode = 'discover';
+        }
+      } catch(e) {
+        // Network totally down — retry after 5s
+        setTimeout(connectStream, 5000);
       }
-    }, 3000);
+    }, 2000);
   };
 }
 async function logout() { await fetch('/api/auth/logout',{method:'POST'}); window.location.href='/'; }

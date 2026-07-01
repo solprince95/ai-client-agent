@@ -522,6 +522,17 @@ def api_lead_groups():
         return jsonify({"ok": False, "message": str(e)})
 
 
+@app.route("/api/log-buffer")
+@login_required
+def api_log_buffer():
+    """Returns all log lines buffered so far for the current run.
+    Used by the frontend when it reconnects after an SSE drop."""
+    uid = session["user_id"]
+    state = get_user_state(uid)
+    return jsonify({"ok": True, "log": state.get("log_buffer", []),
+                    "running": state.get("running", False)})
+
+
 @app.route("/api/stream")
 @login_required
 def api_stream():
@@ -530,19 +541,24 @@ def api_stream():
 
     def event_stream():
         q = state["log_queue"]
-        # Stream new messages
         while True:
             try:
-                line = q.get(timeout=30)
+                # Wait max 10s — well under Render's 30s idle-connection kill
+                line = q.get(timeout=10)
             except queue.Empty:
-                yield "data: \n\n"  # keepalive
+                # Send a comment-style keepalive (ignored by browser, keeps TCP alive)
+                yield ": keepalive\n\n"
                 continue
             if line == "__DONE__":
                 yield "event: done\ndata: done\n\n"
                 break
             yield f"data: {line}\n\n"
 
-    return Response(event_stream(), mimetype="text/event-stream")
+    return Response(event_stream(), mimetype="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "X-Accel-Buffering": "no",  # disables Nginx/proxy buffering on Render
+                    })
 
 
 # ══════════════════════════════════════════════════════
