@@ -156,20 +156,46 @@ def fetch_websites(businesses, config, log=_noop):
 # ══════════════════════════════════════════════════════
 #  STEP 3 — Extract emails from websites
 # ══════════════════════════════════════════════════════
-def _fetch_text(url, max_bytes=80_000, timeout=6):
+
+# Large chains / platforms that will never respond to cold outreach
+# and whose sites are slow, JS-heavy, or bot-protected.
+_SKIP_DOMAINS = {
+    "amazon", "flipkart", "myntra", "meesho", "snapdeal", "nykaa",
+    "zomato", "swiggy", "dunzo", "blinkit", "zepto",
+    "firstcry", "ajio", "tatacliq", "jiomart", "bigbasket",
+    "croma", "reliancedigital", "vijaysales", "poorvika",
+    "dmart", "dmart.in", "avenue-supermarts",
+    "makemytrip", "goibibo", "yatra", "booking.com", "oyo",
+    "justdial", "sulekha", "indiamart", "tradeindia", "exportersindia",
+    "facebook", "instagram", "twitter", "linkedin", "youtube",
+    "google", "wikipedia", "wix.com", "godaddy",
+}
+
+def _should_skip(url):
+    try:
+        domain = urlparse(url).netloc.lower().replace("www.", "")
+        return any(s in domain for s in _SKIP_DOMAINS)
+    except Exception:
+        return False
+
+
+def _fetch_text(url, max_bytes=60_000):
     """
-    Fetch URL text with a hard byte cap (80 KB default).
-    stream=True means we stop reading the body once we hit max_bytes,
-    so slow-drip responses can never block the loop indefinitely —
-    requests timeout= only covers socket inactivity, not total body time.
+    Fetch URL text with:
+    - (3s connect, 5s read) timeout tuple — covers stalled SSL/DNS too
+    - 60 KB body cap via stream=True — stops slow-drip bodies
+    Both are needed: timeout covers connection phase,
+    byte cap covers the body phase.
     """
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        with requests.get(url, headers=headers, timeout=timeout,
-                          allow_redirects=True, stream=True) as r:
+        with requests.get(url, headers=headers,
+                          timeout=(3, 5),          # (connect, read-per-chunk)
+                          allow_redirects=True,
+                          stream=True) as r:
             chunks = []
             total  = 0
-            for chunk in r.iter_content(chunk_size=8192):
+            for chunk in r.iter_content(chunk_size=4096):
                 chunks.append(chunk)
                 total += len(chunk)
                 if total >= max_bytes:
@@ -180,11 +206,9 @@ def _fetch_text(url, max_bytes=80_000, timeout=6):
 
 
 def extract_email(site_url):
-    """
-    Try to find a contact email on a website.
-    Uses _fetch_text (stream + byte cap) so slow/hung sites
-    can never stall the pipeline.
-    """
+    if _should_skip(site_url):
+        return None
+
     found       = set()
     extra_pages = []
 
@@ -204,14 +228,13 @@ def extract_email(site_url):
                 if urlparse(full).netloc == urlparse(site_url).netloc and full != site_url:
                     extra_pages.append(full)
 
-    # Return early if homepage already has a clean email
     clean = [e for e in found if "noreply" not in e and "no-reply" not in e]
     if clean:
         return clean[0]
 
     # Check up to 2 inner contact/about pages
     for url in extra_pages[:2]:
-        text = _fetch_text(url, timeout=5)
+        text = _fetch_text(url)
         for e in EMAIL_RE.findall(text):
             if not any(s in e.lower() for s in SKIP_WORDS):
                 found.add(e.lower())
@@ -223,12 +246,23 @@ def extract_email(site_url):
 def find_emails(businesses, log=_noop):
     log("Looking for contact emails on each website...")
     with_emails = []
+    deadline = time.time() + 240  # 4-minute global budget for the whole step
+
     for i, biz in enumerate(businesses, 1):
+        if time.time() > deadline:
+            log(f"  ⏱ Time limit reached — skipping remaining {len(businesses)-i+1} site(s).")
+            break
+
+        if _should_skip(biz.get("website", "")):
+            log(f"  [{i}/{len(businesses)}] {biz.get('name','?')[:35]} → — skipped (large chain)")
+            continue
+
         em = extract_email(biz["website"])
         if em:
             biz["email"] = em
             with_emails.append(biz)
         log(f"  [{i}/{len(businesses)}] {biz.get('name','?')[:35]} → {'✅ ' + em if em else '— no email'}")
+
     log(f"{len(with_emails)} businesses with usable email addresses.")
     return with_emails
 
