@@ -208,6 +208,17 @@ def _fetch_text(url, max_bytes=60_000, site_deadline=None):
         return ""
 
 
+PHONE_RE = re.compile(
+    r'(?:\+91[\-\s]?)?'
+    r'(?:\(?[6-9]\d{4}\)?[\-\s]?\d{5}'
+    r'|\(?0\d{2,4}\)?[\-\s]?\d{6,8})'
+)
+
+_COMPANY_PREFIXES = re.compile(
+    r'^(info|contact|support|sales|admin|hello|mail|office|enquiry|query|team|hr|help)',
+    re.I
+)
+
 # Titles/positions we look for near a person's name
 _POSITION_KEYWORDS = re.compile(
     r'\b(CEO|CTO|CFO|COO|CMO|Founder|Co-Founder|Director|Manager|Head|Owner|'
