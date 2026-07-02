@@ -4,7 +4,7 @@ Same functionality as the CLI version, but every step reports progress
 through a `log(message)` callback so the dashboard can show live status.
 """
 
-import os, re, time, smtplib, imaplib, email, requests, csv
+import os, re, time, smtplib, imaplib, email, requests, csv, json
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -208,24 +208,135 @@ def _fetch_text(url, max_bytes=60_000, site_deadline=None):
         return ""
 
 
-PHONE_RE = re.compile(
-    r'(?:\+91[\-\s]?)?'
-    r'(?:\(?[6-9]\d{4}\)?[\-\s]?\d{5}'
-    r'|\(?0\d{2,4}\)?[\-\s]?\d{6,8})'
-)
-
-_COMPANY_PREFIXES = re.compile(
-    r'^(info|contact|support|sales|admin|hello|mail|office|enquiry|query|team|hr|help)',
+# Titles/positions we look for near a person's name
+_POSITION_KEYWORDS = re.compile(
+    r'\b(CEO|CTO|CFO|COO|CMO|Founder|Co-Founder|Director|Manager|Head|Owner|'
+    r'President|Partner|MD|Managing Director|General Manager|GM|VP|'
+    r'Principal|Proprietor|Chairman|Executive|Officer|Lead|Engineer|'
+    r'Designer|Developer|Consultant|Advisor|Associate|Coordinator|'
+    r'Accountant|Doctor|Dr\.?|Prof\.?|Professor)\b',
     re.I
 )
+
+# Name-like pattern: two or three capitalised words, not all-caps acronyms
+_NAME_RE = re.compile(r'\b([A-Z][a-z]{1,20}(?:\s+[A-Z][a-z]{1,20}){1,2})\b')
+
+
+def _extract_people(soup, all_emails, all_phones):
+    """
+    Parse structured people records from a BeautifulSoup page.
+    Tries three strategies in order:
+      1. schema.org/Person JSON-LD blocks
+      2. vCard / hCard microformat elements
+      3. Heuristic: find name+position near an email/phone in the DOM
+    Returns a list of dicts: {name, position, email, phone}
+    """
+    people = []
+    seen_emails = set()
+
+    # ── Strategy 1: JSON-LD schema.org/Person ──────────────
+    for tag in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(tag.string or "")
+            # May be a single object or a list
+            items = data if isinstance(data, list) else [data]
+            for item in items:
+                # Handle @graph arrays
+                if "@graph" in item:
+                    items += item["@graph"]
+                t = item.get("@type", "")
+                if "Person" not in (t if isinstance(t, str) else " ".join(t)):
+                    continue
+                name     = item.get("name", "")
+                position = item.get("jobTitle", "") or item.get("role", "")
+                email    = (item.get("email", "") or "").replace("mailto:", "").lower().strip()
+                phone    = re.sub(r'[\s\-.()+]', '', item.get("telephone", "") or "")
+                if name and email and email not in seen_emails:
+                    people.append({"name": name, "position": position, "email": email, "phone": phone})
+                    seen_emails.add(email)
+        except Exception:
+            pass
+
+    # ── Strategy 2: hCard / vCard microformat ──────────────
+    for card in soup.find_all(class_=re.compile(r'\bvcard\b|\bhcard\b', re.I)):
+        name     = (card.find(class_=re.compile(r'\bfn\b', re.I)) or card).get_text(" ", strip=True)
+        position = ""
+        el = card.find(class_=re.compile(r'(title|role|org)', re.I))
+        if el:
+            position = el.get_text(" ", strip=True)
+        email_el = card.find("a", href=re.compile(r'^mailto:', re.I))
+        email    = email_el["href"].replace("mailto:", "").lower().strip() if email_el else ""
+        phone_el = card.find("a", href=re.compile(r'^tel:', re.I))
+        phone    = re.sub(r'[\s\-.()+]', '', phone_el["href"].replace("tel:", "")) if phone_el else ""
+        if name and email and email not in seen_emails and len(name) < 60:
+            people.append({"name": name[:60], "position": position[:60], "email": email, "phone": phone})
+            seen_emails.add(email)
+
+    # ── Strategy 3: heuristic DOM scan ────────────────────
+    # Look at short text blocks that contain a position keyword
+    # and see if a name pattern and email/phone are nearby.
+    if len(people) < 5:
+        # Build a phone lookup set for fast matching
+        phone_set = set(all_phones)
+
+        for el in soup.find_all(["p", "div", "li", "span", "td"]):
+            text = el.get_text(" ", strip=True)
+            if len(text) > 300 or len(text) < 4:
+                continue
+            if not _POSITION_KEYWORDS.search(text):
+                continue
+
+            # Find a name in the same block
+            names = _NAME_RE.findall(text)
+            if not names:
+                continue
+            name = names[0]
+
+            # Extract position keyword
+            pos_match = _POSITION_KEYWORDS.search(text)
+            position  = pos_match.group(0) if pos_match else ""
+
+            # Look for email in this element or a close sibling
+            email = ""
+            for candidate in EMAIL_RE.findall(text):
+                candidate = candidate.lower().strip()
+                if not any(s in candidate for s in SKIP_WORDS):
+                    email = candidate
+                    break
+            # Also check sibling/parent text if no email in this block
+            if not email:
+                parent_text = el.parent.get_text(" ", strip=True) if el.parent else ""
+                for candidate in EMAIL_RE.findall(parent_text):
+                    candidate = candidate.lower().strip()
+                    if not any(s in candidate for s in SKIP_WORDS):
+                        email = candidate
+                        break
+
+            # Look for phone similarly
+            phone = ""
+            for p in PHONE_RE.findall(text):
+                cleaned = re.sub(r'[\s\-.()+]', '', p)
+                if len(cleaned) >= 10:
+                    phone = cleaned
+                    break
+
+            if name and (email or phone) and email not in seen_emails and len(name) < 60:
+                people.append({"name": name, "position": position, "email": email, "phone": phone})
+                if email:
+                    seen_emails.add(email)
+            if len(people) >= 5:
+                break
+
+    return people[:5]
 
 
 def extract_contact_info(site_url):
     """
     Returns a dict with:
       company_email  – best company inbox (info@, contact@, etc.)
-      people_emails  – personal-looking emails (name@domain)
-      people_phones  – phone numbers found on the site
+      people_data    – list of {name, position, email, phone} dicts
+      people_emails  – flat list of personal emails (back-compat)
+      people_phones  – flat list of phones (back-compat)
     """
     if _should_skip(site_url):
         return {}
@@ -234,6 +345,7 @@ def extract_contact_info(site_url):
     all_emails    = set()
     all_phones    = set()
     extra_pages   = []
+    all_soups     = []
 
     def _scrape(text):
         for e in EMAIL_RE.findall(text):
@@ -244,11 +356,12 @@ def extract_contact_info(site_url):
             cleaned = re.sub(r'[\s\-.()+]', '', p)
             if len(cleaned) >= 10:
                 all_phones.add(cleaned)
+        return BeautifulSoup(text, "html.parser")
 
     text = _fetch_text(site_url, site_deadline=site_deadline)
     if text:
-        _scrape(text)
-        soup = BeautifulSoup(text, "html.parser")
+        soup = _scrape(text)
+        all_soups.append(soup)
         for a in soup.find_all("a", href=True):
             h = a["href"]
             if h.startswith("mailto:"):
@@ -257,7 +370,7 @@ def extract_contact_info(site_url):
                 cleaned = re.sub(r'[\s\-.()+]', '', h.replace("tel:", ""))
                 if len(cleaned) >= 10:
                     all_phones.add(cleaned)
-            elif any(k in h.lower() for k in ["contact", "about", "team", "reach", "connect", "people"]):
+            elif any(k in h.lower() for k in ["contact", "about", "team", "reach", "connect", "people", "staff"]):
                 full = urljoin(site_url, h)
                 if urlparse(full).netloc == urlparse(site_url).netloc and full != site_url:
                     extra_pages.append(full)
@@ -267,8 +380,10 @@ def extract_contact_info(site_url):
             break
         text = _fetch_text(url, site_deadline=site_deadline)
         if text:
-            _scrape(text)
+            soup = _scrape(text)
+            all_soups.append(soup)
 
+    # Classify emails
     company_emails = [e for e in all_emails
                       if _COMPANY_PREFIXES.match(e.split("@")[0])
                       and "noreply" not in e and "no-reply" not in e]
@@ -276,15 +391,23 @@ def extract_contact_info(site_url):
                       if not _COMPANY_PREFIXES.match(e.split("@")[0])
                       and "noreply" not in e and "no-reply" not in e]
 
-    company_email = (company_emails[0] if company_emails
-                     else people_emails[0] if people_emails
-                     else list(all_emails)[0] if all_emails
-                     else None)
+    company_email  = (company_emails[0] if company_emails
+                      else people_emails[0] if people_emails
+                      else list(all_emails)[0] if all_emails
+                      else None)
+
+    # Extract structured people records from all scraped pages
+    people_data = []
+    for soup in all_soups:
+        people_data = _extract_people(soup, all_emails, all_phones)
+        if people_data:
+            break
 
     return {
         "company_email": company_email,
-        "people_emails": people_emails[:5],
-        "people_phones": list(all_phones)[:5],
+        "people_data":   people_data,
+        "people_emails": [p["email"] for p in people_data if p.get("email")] or people_emails[:5],
+        "people_phones": [p["phone"] for p in people_data if p.get("phone")] or list(all_phones)[:5],
     }
 
 
@@ -308,6 +431,7 @@ def find_emails(businesses, log=_noop):
             biz["email"]         = em
             biz["people_emails"] = ",".join(info.get("people_emails", []))
             biz["people_phones"] = ",".join(info.get("people_phones", []))
+            biz["people_data"]   = json.dumps(info.get("people_data", []), ensure_ascii=False)
             with_emails.append(biz)
         log(f"  [{i}/{len(businesses)}] {biz.get('name','?')[:35]} → {'✅ ' + em if em else '— no email'}")
 
@@ -495,6 +619,7 @@ def upsert_leads(businesses, config, log=_noop, user_id=None):
             "phone":         biz.get("phone", ""),
             "people_emails": biz.get("people_emails", ""),
             "people_phones": biz.get("people_phones", ""),
+            "people_data":   biz.get("people_data", "[]"),
             "business_type": biz.get("business_type", ""),
             "city":          city,
             "match_score":   compute_match_score(biz, targets),
@@ -526,6 +651,7 @@ def upsert_leads(businesses, config, log=_noop, user_id=None):
                     "phone":         row.get("phone"),
                     "people_emails": row.get("people_emails"),
                     "people_phones": row.get("people_phones"),
+                    "people_data":   row.get("people_data"),
                     "match_score":   row.get("match_score"),
                     "status":        row["status"],
                     "business_type": row.get("business_type"),
