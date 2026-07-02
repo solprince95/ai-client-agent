@@ -208,53 +208,90 @@ def _fetch_text(url, max_bytes=60_000, site_deadline=None):
         return ""
 
 
-def extract_email(site_url):
+PHONE_RE = re.compile(
+    r'(?:\+91[\-\s]?)?'
+    r'(?:\(?[6-9]\d{4}\)?[\-\s]?\d{5}'
+    r'|\(?0\d{2,4}\)?[\-\s]?\d{6,8})'
+)
+
+_COMPANY_PREFIXES = re.compile(
+    r'^(info|contact|support|sales|admin|hello|mail|office|enquiry|query|team|hr|help)',
+    re.I
+)
+
+
+def extract_contact_info(site_url):
+    """
+    Returns a dict with:
+      company_email  – best company inbox (info@, contact@, etc.)
+      people_emails  – personal-looking emails (name@domain)
+      people_phones  – phone numbers found on the site
+    """
     if _should_skip(site_url):
-        return None
+        return {}
 
-    # Hard 8-second wall-clock limit for this entire site (all pages combined)
     site_deadline = time.time() + 8
+    all_emails    = set()
+    all_phones    = set()
+    extra_pages   = []
 
-    found       = set()
-    extra_pages = []
+    def _scrape(text):
+        for e in EMAIL_RE.findall(text):
+            e = e.lower().strip()
+            if not any(s in e for s in SKIP_WORDS):
+                all_emails.add(e)
+        for p in PHONE_RE.findall(text):
+            cleaned = re.sub(r'[\s\-.()+]', '', p)
+            if len(cleaned) >= 10:
+                all_phones.add(cleaned)
 
-    # Homepage pass
     text = _fetch_text(site_url, site_deadline=site_deadline)
     if text:
-        for e in EMAIL_RE.findall(text):
-            if not any(s in e.lower() for s in SKIP_WORDS):
-                found.add(e.lower())
+        _scrape(text)
         soup = BeautifulSoup(text, "html.parser")
         for a in soup.find_all("a", href=True):
             h = a["href"]
             if h.startswith("mailto:"):
-                found.add(h.replace("mailto:", "").split("?")[0].lower())
-            elif any(k in h.lower() for k in ["contact", "about", "reach", "connect"]):
+                all_emails.add(h.replace("mailto:", "").split("?")[0].lower().strip())
+            elif h.startswith("tel:"):
+                cleaned = re.sub(r'[\s\-.()+]', '', h.replace("tel:", ""))
+                if len(cleaned) >= 10:
+                    all_phones.add(cleaned)
+            elif any(k in h.lower() for k in ["contact", "about", "team", "reach", "connect", "people"]):
                 full = urljoin(site_url, h)
                 if urlparse(full).netloc == urlparse(site_url).netloc and full != site_url:
                     extra_pages.append(full)
 
-    clean = [e for e in found if "noreply" not in e and "no-reply" not in e]
-    if clean:
-        return clean[0]
-
-    # Check up to 2 inner contact/about pages — only if time budget remains
     for url in extra_pages[:2]:
         if time.time() > site_deadline:
             break
         text = _fetch_text(url, site_deadline=site_deadline)
-        for e in EMAIL_RE.findall(text):
-            if not any(s in e.lower() for s in SKIP_WORDS):
-                found.add(e.lower())
+        if text:
+            _scrape(text)
 
-    clean = [e for e in found if "noreply" not in e and "no-reply" not in e]
-    return clean[0] if clean else (list(found)[0] if found else None)
+    company_emails = [e for e in all_emails
+                      if _COMPANY_PREFIXES.match(e.split("@")[0])
+                      and "noreply" not in e and "no-reply" not in e]
+    people_emails  = [e for e in all_emails
+                      if not _COMPANY_PREFIXES.match(e.split("@")[0])
+                      and "noreply" not in e and "no-reply" not in e]
+
+    company_email = (company_emails[0] if company_emails
+                     else people_emails[0] if people_emails
+                     else list(all_emails)[0] if all_emails
+                     else None)
+
+    return {
+        "company_email": company_email,
+        "people_emails": people_emails[:5],
+        "people_phones": list(all_phones)[:5],
+    }
 
 
 def find_emails(businesses, log=_noop):
     log("Looking for contact emails on each website...")
-    with_emails = []
-    global_deadline = time.time() + 240  # 4-min safety net for whole step
+    with_emails      = []
+    global_deadline  = time.time() + 240
 
     for i, biz in enumerate(businesses, 1):
         if time.time() > global_deadline:
@@ -265,9 +302,12 @@ def find_emails(businesses, log=_noop):
             log(f"  [{i}/{len(businesses)}] {biz.get('name','?')[:35]} → — skipped (large chain)")
             continue
 
-        em = extract_email(biz["website"])
+        info = extract_contact_info(biz["website"])
+        em   = info.get("company_email")
         if em:
-            biz["email"] = em
+            biz["email"]         = em
+            biz["people_emails"] = ",".join(info.get("people_emails", []))
+            biz["people_phones"] = ",".join(info.get("people_phones", []))
             with_emails.append(biz)
         log(f"  [{i}/{len(businesses)}] {biz.get('name','?')[:35]} → {'✅ ' + em if em else '— no email'}")
 
@@ -453,6 +493,8 @@ def upsert_leads(businesses, config, log=_noop, user_id=None):
             "website":       biz.get("website", ""),
             "email":         biz["email"].lower().strip(),
             "phone":         biz.get("phone", ""),
+            "people_emails": biz.get("people_emails", ""),
+            "people_phones": biz.get("people_phones", ""),
             "business_type": biz.get("business_type", ""),
             "city":          city,
             "match_score":   compute_match_score(biz, targets),
@@ -482,6 +524,8 @@ def upsert_leads(businesses, config, log=_noop, user_id=None):
                 to_update.append((prev["id"], {
                     "website":       row.get("website"),
                     "phone":         row.get("phone"),
+                    "people_emails": row.get("people_emails"),
+                    "people_phones": row.get("people_phones"),
                     "match_score":   row.get("match_score"),
                     "status":        row["status"],
                     "business_type": row.get("business_type"),
@@ -529,7 +573,7 @@ def mark_lead_replied(email, user_id=None, reply_subject=""):
         print(f"mark_lead_replied error: {e}", flush=True)
 
 
-def get_leads(user_id, status=None, group_tag=None, search=None):
+def get_leads(user_id, status=None, search=None):
     """Fetch leads for the CRM dashboard, with optional filters."""
     sb = _get_supabase()
     if not sb:
@@ -538,8 +582,6 @@ def get_leads(user_id, status=None, group_tag=None, search=None):
         q = sb.table("leads").select("*").eq("user_id", user_id)
         if status:
             q = q.eq("status", status)
-        if group_tag:
-            q = q.eq("group_tag", group_tag)
         res = q.order("match_score", desc=True).execute()
         rows = res.data or []
         if search:
@@ -558,7 +600,7 @@ def update_lead(lead_id, user_id, fields):
     sb = _get_supabase()
     if not sb:
         return False
-    allowed = {"status", "group_tag"}
+    allowed = {"status"}
     update = {k: v for k, v in fields.items() if k in allowed}
     if not update:
         return False

@@ -75,19 +75,37 @@
   .lead-score-val.lo { color: #c0392b; }
   .lead-score-label { font-size: 0.62rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.03em; }
   .lead-status-select, .lead-group-select { padding: 0.4rem 0.6rem; border: 1.5px solid #dde3ff; border-radius: 6px; font-size: 0.78rem; font-weight: 600; outline: none; cursor: pointer; background: #fff; }
-  .lead-status-select.st-new,
   .lead-status-select.st-discovered { color: #555; }
   .lead-status-select.st-contacted { color: #1a56db; }
   .lead-status-select.st-replied { color: #27ae60; }
   .lead-status-select.st-closed { color: #888; }
   .lead-status-select.st-unsubscribed { color: #c0392b; }
-  .crm-select-bar { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.85rem; flex-wrap: wrap; }
-  .crm-select-all { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: #444; font-weight: 600; cursor: pointer; }
-  .crm-select-all input { width: 16px; height: 16px; cursor: pointer; }
-  .send-selected-btn { margin-left: auto; background: #1a56db; color: #fff; border: none; padding: 0.6rem 1.2rem; border-radius: 8px; font-size: 0.85rem; font-weight: 700; cursor: pointer; }
-  .send-selected-btn:disabled { background: #ccc; cursor: not-allowed; }
-  .lead-checkbox { width: 17px; height: 17px; cursor: pointer; flex-shrink: 0; }
-  .lead-phone { font-family: monospace; }
+  .lead-card { border:1.5px solid #dde3ff; border-radius:10px; background:#fff; overflow:hidden; transition:border-color .2s; }
+  .lead-card:hover { border-color:#a0b4ff; }
+  .lead-card-row { display:flex; align-items:center; gap:0.85rem; padding:0.85rem 1rem; cursor:pointer; flex-wrap:wrap; }
+  .lead-expand { display:none; border-top:1px solid #e8eeff; background:#f7f9ff; padding:1rem 1.1rem; }
+  .lead-expand.open { display:block; }
+  .expand-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.6rem 1.5rem; margin-bottom:0.9rem; }
+  .expand-item { font-size:0.8rem; }
+  .expand-label { font-size:0.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:#aaa; margin-bottom:2px; }
+  .expand-val { color:#1a1a2e; font-weight:600; word-break:break-all; }
+  .expand-val a { color:#1a56db; text-decoration:none; }
+  .expand-val a:hover { text-decoration:underline; }
+  .expand-actions { display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.5rem; }
+  .expand-btn { padding:0.45rem 1rem; border-radius:7px; font-size:0.78rem; font-weight:700; cursor:pointer; border:none; }
+  .btn-meet { background:#1a56db; color:#fff; }
+  .btn-meet:hover { background:#1545b8; }
+  .btn-copy { background:#e8eeff; color:#1a56db; }
+  .btn-copy:hover { background:#d0daff; }
+  .expand-chevron { margin-left:auto; color:#aaa; font-size:0.8rem; transition:transform .2s; flex-shrink:0; }
+  .lead-card.expanded .expand-chevron { transform:rotate(180deg); }
+  .crm-select-bar { display:flex; align-items:center; gap:1rem; margin-bottom:0.85rem; flex-wrap:wrap; }
+  .crm-select-all { display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; color:#444; font-weight:600; cursor:pointer; }
+  .crm-select-all input { width:16px; height:16px; cursor:pointer; }
+  .send-selected-btn { margin-left:auto; background:#1a56db; color:#fff; border:none; padding:0.6rem 1.2rem; border-radius:8px; font-size:0.85rem; font-weight:700; cursor:pointer; }
+  .send-selected-btn:disabled { background:#ccc; cursor:not-allowed; }
+  .lead-checkbox { width:17px; height:17px; cursor:pointer; flex-shrink:0; }
+  .lead-phone { font-family:monospace; }
 </style>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-2RWLQ2LHCL"></script>
 <script>
@@ -153,9 +171,6 @@
           <option value="replied">Replied</option>
           <option value="closed">Closed</option>
           <option value="unsubscribed">Unsubscribed</option>
-        </select>
-        <select class="crm-select" id="crm-group-filter" onchange="loadLeads()">
-          <option value="">All groups</option>
         </select>
       </div>
 
@@ -245,7 +260,7 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
   if (tab === 'sent') loadSentEmails();
-  if (tab === 'leads') { loadLeadGroups(); loadLeads(); }
+  if (tab === 'leads') loadLeads();
 }
 
 async function loadProfile() {
@@ -342,18 +357,7 @@ function scoreClass(score) {
   return 'lo';
 }
 
-async function loadLeadGroups() {
-  try {
-    const res = await fetch('/api/leads/groups');
-    const data = await res.json();
-    if (!data.ok) return;
-    const sel = document.getElementById('crm-group-filter');
-    const current = sel.value;
-    sel.innerHTML = '<option value="">All groups</option>' +
-      data.groups.map(g => `<option value="${g}">${g}</option>`).join('');
-    sel.value = current;
-  } catch (e) { /* non-fatal */ }
-}
+async function loadLeadGroups() { /* groups removed */ }
 
 function updateSelectedCount() {
   const n = selectedLeadIds.size;
@@ -379,12 +383,9 @@ async function loadLeads() {
   const container = document.getElementById('lead-list');
   const search = document.getElementById('crm-search').value.trim();
   const status = document.getElementById('crm-status-filter').value;
-  const group = document.getElementById('crm-group-filter').value;
-
   const params = new URLSearchParams();
   if (search) params.set('q', search);
   if (status) params.set('status', status);
-  if (group) params.set('group', group);
 
   try {
     const res = await fetch('/api/leads?' + params.toString());
@@ -408,33 +409,69 @@ async function loadLeads() {
       return;
     }
 
-    container.innerHTML = leads.map(l => `
-      <div class="lead-card">
-        <input type="checkbox" class="lead-checkbox" data-lead-id="${l.id}"
-               ${selectedLeadIds.has(l.id) ? 'checked' : ''}
-               ${l.status !== 'discovered' ? 'disabled title="Already contacted"' : ''}
-               onchange="toggleLeadSelected('${l.id}', this.checked)"/>
-        <div class="lead-score">
-          <div class="lead-score-val ${scoreClass(l.match_score||0)}">${l.match_score||0}</div>
-          <div class="lead-score-label">Match</div>
+    container.innerHTML = leads.map(l => {
+      const peopleEmails = l.people_emails ? l.people_emails.split(',').filter(Boolean) : [];
+      const peoplePhones = l.people_phones ? l.people_phones.split(',').filter(Boolean) : [];
+      const safeEmail    = (l.email||'').replace(/'/g,"\\'");
+      const safeName     = (l.business_name||'').replace(/'/g,"\\'");
+      return `
+      <div class="lead-card" id="card-${l.id}">
+        <div class="lead-card-row" onclick="toggleExpand('${l.id}')">
+          <input type="checkbox" class="lead-checkbox" data-lead-id="${l.id}"
+                 ${selectedLeadIds.has(l.id) ? 'checked' : ''}
+                 ${l.status !== 'discovered' ? 'disabled title="Already contacted"' : ''}
+                 onclick="event.stopPropagation()"
+                 onchange="toggleLeadSelected('${l.id}', this.checked)"/>
+          <div class="lead-score">
+            <div class="lead-score-val ${scoreClass(l.match_score||0)}">${l.match_score||0}</div>
+            <div class="lead-score-label">Match</div>
+          </div>
+          <div class="lead-main">
+            <div class="lead-name">${l.business_name || 'Unknown'}</div>
+            <div class="lead-sub">${l.email || ''}${l.phone ? ' · <span class="lead-phone">'+l.phone+'</span>' : ''}${l.city ? ' · '+l.city : ''}</div>
+          </div>
+          <select class="lead-status-select st-${l.status}"
+                  onclick="event.stopPropagation()"
+                  onchange="updateLeadField('${l.id}', 'status', this.value, this)">
+            <option value="discovered"   ${l.status==='discovered'?'selected':''}>Discovered</option>
+            <option value="contacted"    ${l.status==='contacted'?'selected':''}>Contacted</option>
+            <option value="replied"      ${l.status==='replied'?'selected':''}>Replied</option>
+            <option value="closed"       ${l.status==='closed'?'selected':''}>Closed</option>
+            <option value="unsubscribed" ${l.status==='unsubscribed'?'selected':''}>Unsubscribed</option>
+          </select>
+          <span class="expand-chevron">▼</span>
         </div>
-        <div class="lead-main">
-          <div class="lead-name">${l.business_name || 'Unknown'}</div>
-          <div class="lead-sub">${l.email || ''}${l.phone ? ' · <span class="lead-phone">'+l.phone+'</span>' : ''}${l.city ? ' · ' + l.city : ''}</div>
+        <div class="lead-expand" id="expand-${l.id}">
+          <div class="expand-grid">
+            <div class="expand-item">
+              <div class="expand-label">Company Details</div>
+              <div class="expand-val">${l.business_name||'—'}${l.address?'<br><span style="font-weight:400;color:#666;font-size:0.75rem;">'+l.address+'</span>':''}${l.website?'<br><a href="'+l.website+'" target="_blank">'+l.website+'</a>':''}</div>
+            </div>
+            <div class="expand-item">
+              <div class="expand-label">Company Email</div>
+              <div class="expand-val">${l.email?'<a href="mailto:'+l.email+'">'+l.email+'</a> <button class="expand-btn btn-copy" onclick="event.stopPropagation();copyText(\''+safeEmail+'\')">Copy</button>':'—'}</div>
+            </div>
+            <div class="expand-item">
+              <div class="expand-label">Company Phone</div>
+              <div class="expand-val">${l.phone?'<a href="tel:'+l.phone+'">'+l.phone+'</a> <button class="expand-btn btn-copy" onclick="event.stopPropagation();copyText(\''+l.phone+'\')">Copy</button>':'—'}</div>
+            </div>
+            <div class="expand-item">
+              <div class="expand-label">People's Emails</div>
+              <div class="expand-val">${peopleEmails.length?peopleEmails.map(e=>'<a href="mailto:'+e+'">'+e+'</a>').join('<br>'):'—'}</div>
+            </div>
+            <div class="expand-item">
+              <div class="expand-label">People's Phone Numbers</div>
+              <div class="expand-val">${peoplePhones.length?peoplePhones.map(p=>'<a href="tel:'+p+'">'+p+'</a>').join('<br>'):'—'}</div>
+            </div>
+          </div>
+          <div class="expand-actions">
+            <button class="expand-btn btn-meet" onclick="event.stopPropagation();startMeet('${safeEmail}','${safeName}')">&#128249; Start Google Meet</button>
+            ${l.email?`<button class="expand-btn btn-copy" onclick="event.stopPropagation();copyText('${safeEmail}')">Copy Email</button>`:''}
+            ${l.phone?`<button class="expand-btn btn-copy" onclick="event.stopPropagation();copyText('${l.phone}')">Copy Phone</button>`:''}
+          </div>
         </div>
-        <select class="lead-status-select st-${l.status}" onchange="updateLeadField('${l.id}', 'status', this.value, this)">
-          <option value="discovered" ${l.status==='discovered'?'selected':''}>Discovered</option>
-          <option value="contacted" ${l.status==='contacted'?'selected':''}>Contacted</option>
-          <option value="replied" ${l.status==='replied'?'selected':''}>Replied</option>
-          <option value="closed" ${l.status==='closed'?'selected':''}>Closed</option>
-          <option value="unsubscribed" ${l.status==='unsubscribed'?'selected':''}>Unsubscribed</option>
-        </select>
-        <select class="lead-group-select" onchange="updateLeadField('${l.id}', 'group_tag', this.value, this)">
-          ${['uncategorized','hot','warm','cold','vip'].map(g =>
-            `<option value="${g}" ${ (l.group_tag||'uncategorized')===g ? 'selected':''}>${g}</option>`).join('')}
-        </select>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
 
     updateSelectedCount();
   } catch (err) {
@@ -472,6 +509,33 @@ async function sendToSelected() {
   }
 }
 
+function toggleExpand(leadId) {
+  const card   = document.getElementById('card-' + leadId);
+  const expand = document.getElementById('expand-' + leadId);
+  const isOpen = expand.classList.contains('open');
+  document.querySelectorAll('.lead-expand.open').forEach(el => el.classList.remove('open'));
+  document.querySelectorAll('.lead-card.expanded').forEach(el => el.classList.remove('expanded'));
+  if (!isOpen) { expand.classList.add('open'); card.classList.add('expanded'); }
+}
+
+function startMeet(email, name) {
+  window.open('https://meet.google.com/new', '_blank');
+  if (email) {
+    setTimeout(() => {
+      copyText(email);
+      alert('Google Meet opened!\n\n"' + (name||email) + '" email copied to clipboard.\nPaste it in the "Add people" box in Google Meet.');
+    }, 600);
+  }
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+  });
+}
+
 async function updateLeadField(leadId, field, value, el) {
   el.disabled = true;
   try {
@@ -481,9 +545,7 @@ async function updateLeadField(leadId, field, value, el) {
     });
     const data = await res.json();
     if (data.ok) {
-      if (field === 'status') {
-        el.className = 'lead-status-select st-' + value;
-      }
+      if (field === 'status') el.className = 'lead-status-select st-' + value;
       loadLeads();
     }
   } catch (e) { /* leave value as user set it; next load will resync */ }
@@ -583,7 +645,7 @@ function startPolling() {
         _pollInterval = setInterval(loadStatus, 10000);
         loadStatus();
         setTimeout(() => {
-          loadLeadGroups();
+          
           loadLeads();
           if (_runMode === 'discover') switchTab('leads');
           _runMode = 'discover';

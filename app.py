@@ -292,7 +292,7 @@ def api_status():
 # ══════════════════════════════════════════════════════
 def _build_config(profile):
     business_types = profile.get("business_types") or (
-        "small business,shop,store,restaurant,hotel,clinic,school,agency,company,office"
+        "small business,shop,store,restaurant,hotel,clinic,school,agency,company,office,pvt ltd,enterprise,industries"
     )
     if isinstance(business_types, str):
         business_types = [b.strip() for b in business_types.split(",") if b.strip()]
@@ -484,12 +484,11 @@ def api_sent_emails():
 @app.route("/api/leads", methods=["GET"])
 @login_required
 def api_get_leads():
-    uid = session["user_id"]
+    uid    = session["user_id"]
     status = request.args.get("status") or None
-    group_tag = request.args.get("group") or None
     search = request.args.get("q") or None
     try:
-        leads = agent_core.get_leads(uid, status=status, group_tag=group_tag, search=search)
+        leads = agent_core.get_leads(uid, status=status, search=search)
         return jsonify({"ok": True, "leads": leads})
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)})
@@ -509,17 +508,8 @@ def api_update_lead(lead_id):
         return jsonify({"ok": False, "message": str(e)})
 
 
-@app.route("/api/leads/groups", methods=["GET"])
-@login_required
-def api_lead_groups():
-    """Distinct group tags for this user, so the CRM filter dropdown is populated."""
-    uid = session["user_id"]
-    try:
-        leads = agent_core.get_leads(uid)
-        groups = sorted({l.get("group_tag") or "uncategorized" for l in leads})
-        return jsonify({"ok": True, "groups": groups})
-    except Exception as e:
-        return jsonify({"ok": False, "message": str(e)})
+
+
 
 
 @app.route("/api/log-buffer")
