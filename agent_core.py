@@ -655,45 +655,54 @@ def upsert_leads(businesses, config, log=_noop, user_id=None):
     if not rows:
         return
 
-    try:
-        # Fetch existing lead emails for this user so we can decide
-        # insert vs update without relying on upsert/on_conflict syntax
-        # (which varies across supabase-py versions).
-        emails = [r["email"] for r in rows]
-        existing_res = sb.table("leads").select("id,email,status") \
-                         .eq("user_id", user_id).in_("email", emails).execute()
-        existing = {r["email"]: r for r in (existing_res.data or [])}
+    inserted = 0
+    updated  = 0
+    errors   = 0
 
-        to_insert = []
-        to_update = []
-        for row in rows:
-            prev = existing.get(row["email"])
-            if prev:
-                # Never regress status of a lead already past discovered
-                if prev["status"] not in ("discovered", None):
-                    row["status"] = prev["status"]
-                to_update.append((prev["id"], {
-                    "website":       row.get("website"),
-                    "phone":         row.get("phone"),
-                    "people_emails": row.get("people_emails"),
-                    "people_phones": row.get("people_phones"),
-                    "people_data":   row.get("people_data"),
-                    "match_score":   row.get("match_score"),
-                    "status":        row["status"],
-                    "business_type": row.get("business_type"),
-                    "address":       row.get("address"),
-                }))
+    for row in rows:
+        try:
+            # Try to update first (no-op if the row doesn't exist yet)
+            res = sb.table("leads").update({
+                "business_name": row["business_name"],
+                "address":       row.get("address"),
+                "website":       row.get("website"),
+                "phone":         row.get("phone"),
+                "people_emails": row.get("people_emails"),
+                "people_phones": row.get("people_phones"),
+                "people_data":   row.get("people_data"),
+                "match_score":   row.get("match_score"),
+                "business_type": row.get("business_type"),
+                "city":          row.get("city"),
+                # Never regress a lead that's already past 'discovered'
+                # We can't do conditional updates easily, so we fetch status first
+            }).eq("user_id", row["user_id"]).eq("email", row["email"]).execute()
+
+            if res.data:
+                # Row existed — check if we need to preserve its status
+                existing_status = res.data[0].get("status", "discovered")
+                if existing_status not in ("discovered", None):
+                    # Re-apply the preserved status (update above clobbered it)
+                    sb.table("leads").update({"status": existing_status}) \
+                      .eq("user_id", row["user_id"]).eq("email", row["email"]).execute()
+                updated += 1
             else:
-                to_insert.append(row)
+                # Row didn't exist — insert it fresh
+                sb.table("leads").insert(row).execute()
+                inserted += 1
+        except Exception as e:
+            err_str = str(e)
+            if "23505" in err_str or "duplicate key" in err_str.lower():
+                # Race condition: another process inserted between our update check
+                # and our insert — safe to ignore, the row is already there
+                updated += 1
+            else:
+                errors += 1
+                print(f"upsert_leads row error ({row.get('email')}): {e}", flush=True)
 
-        if to_insert:
-            sb.table("leads").insert(to_insert).execute()
-        for lead_id, fields in to_update:
-            sb.table("leads").update(fields).eq("id", lead_id).execute()
-
-        log(f"📇 Saved {len(to_insert)} new + {len(to_update)} updated lead(s) to your CRM.")
-    except Exception as e:
-        log(f"  ⚠️ Could not save leads to CRM: {e}")
+    msg = f"📇 {inserted} new + {updated} updated lead(s) saved to your CRM."
+    if errors:
+        msg += f" ({errors} skipped due to errors)"
+    log(msg)
 
 
 def mark_lead_contacted(email, user_id=None, subject="", body=""):
