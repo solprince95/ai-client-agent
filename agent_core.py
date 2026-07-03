@@ -214,6 +214,21 @@ PHONE_RE = re.compile(
     r'|\(?0\d{2,4}\)?[\-\s]?\d{6,8})'
 )
 
+_BAD_EXTENSIONS = re.compile(r'\.(png|jpg|jpeg|gif|svg|webp|avif|ico|pdf|zip|css|js|mp4|mp3|woff|ttf)$', re.I)
+
+def _is_valid_email(e):
+    """Return True only if e looks like a real email, not an image/asset path."""
+    if not e or '@' not in e:
+        return False
+    local, _, domain = e.partition('@')
+    if not domain or '.' not in domain:
+        return False
+    if _BAD_EXTENSIONS.search(e):
+        return False
+    if any(s in e.lower() for s in SKIP_WORDS):
+        return False
+    return True
+
 _COMPANY_PREFIXES = re.compile(
     r'^(info|contact|support|sales|admin|hello|mail|office|enquiry|query|team|hr|help)',
     re.I
@@ -311,7 +326,7 @@ def _extract_people(soup, all_emails, all_phones):
             email = ""
             for candidate in EMAIL_RE.findall(text):
                 candidate = candidate.lower().strip()
-                if not any(s in candidate for s in SKIP_WORDS):
+                if _is_valid_email(candidate):
                     email = candidate
                     break
             # Also check sibling/parent text if no email in this block
@@ -319,7 +334,7 @@ def _extract_people(soup, all_emails, all_phones):
                 parent_text = el.parent.get_text(" ", strip=True) if el.parent else ""
                 for candidate in EMAIL_RE.findall(parent_text):
                     candidate = candidate.lower().strip()
-                    if not any(s in candidate for s in SKIP_WORDS):
+                    if _is_valid_email(candidate):
                         email = candidate
                         break
 
@@ -361,7 +376,7 @@ def extract_contact_info(site_url):
     def _scrape(text):
         for e in EMAIL_RE.findall(text):
             e = e.lower().strip()
-            if not any(s in e for s in SKIP_WORDS):
+            if _is_valid_email(e):
                 all_emails.add(e)
         for p in PHONE_RE.findall(text):
             cleaned = re.sub(r'[\s\-.()+]', '', p)
