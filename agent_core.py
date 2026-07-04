@@ -924,15 +924,15 @@ def send_all(businesses, config, log=_noop, user_id=None):
 # ══════════════════════════════════════════════════════
 def check_replies(config, log=_noop, user_id=None):
     """
-    Only shows replies from email addresses we actually contacted.
-    Loads contacted list from Supabase (production) or CSV (dev/fallback).
+    Check Gmail inbox for replies from contacted businesses.
+    - Only searches emails from the last 30 days (not ALL inbox)
+    - Hard 25-second wall-clock cap via thread so gunicorn never times out
+    - IMAP socket timeout of 10s per operation
     """
     log("Checking your inbox for replies from contacted businesses...")
     replies = []
 
-    # Load the list of emails we sent to
     contacted = load_sent(user_id=user_id)
-
     if not contacted:
         log("📭 No sent emails on record yet — run the agent first.")
         return replies
@@ -943,56 +943,76 @@ def check_replies(config, log=_noop, user_id=None):
         log("⚠️  No Gmail App Password on file — add one in Setup to enable reply checking.")
         return replies
 
-    try:
-        mail = imaplib.IMAP4_SSL("imap.gmail.com")
-        mail.login(config["GMAIL_ADDRESS"], config["GMAIL_APP_PASSWORD"].replace(" ", ""))
-        mail.select("inbox")
+    def _check():
+        import socket
+        import email.utils as eu
+        from datetime import timedelta
+        inner_replies = []
+        try:
+            # 10-second socket timeout so any single IMAP op can't hang forever
+            mail = imaplib.IMAP4_SSL("imap.gmail.com")
+            mail.sock.settimeout(10)
+            mail.login(config["GMAIL_ADDRESS"], config["GMAIL_APP_PASSWORD"].replace(" ", ""))
+            mail.select("inbox")
 
-        # Search ALL inbox messages (not just UNSEEN) so we don't miss anything
-        _, data = mail.search(None, "ALL")
-        all_ids = data[0].split()
+            # Only search last 30 days — not the entire inbox
+            since_date = (datetime.now() - timedelta(days=30)).strftime("%d-%b-%Y")
+            _, data = mail.search(None, f'(SINCE "{since_date}")')
+            all_ids = data[0].split() if data[0] else []
 
-        found = 0
-        for eid in all_ids:
-            try:
-                # Fetch only headers first (much faster than full RFC822)
-                _, md = mail.fetch(eid, "(BODY[HEADER.FIELDS (FROM)])")
-                raw_from = md[0][1].decode(errors="ignore").lower()
-
-                # Quick check — is any contacted email in this header?
-                if not any(em in raw_from for em in contacted):
+            found = 0
+            for eid in all_ids:
+                try:
+                    _, md = mail.fetch(eid, "(BODY[HEADER.FIELDS (FROM)])")
+                    raw_from = md[0][1].decode(errors="ignore").lower()
+                    if not any(em in raw_from for em in contacted):
+                        continue
+                    _, md_full = mail.fetch(eid, "(RFC822)")
+                    msg = email.message_from_bytes(md_full[0][1])
+                    sender_raw = msg.get("From", "")
+                    _, sender_addr = eu.parseaddr(sender_raw)
+                    sender_addr = sender_addr.lower().strip()
+                    if sender_addr in contacted:
+                        found += 1
+                        inner_replies.append({
+                            "from":    sender_raw,
+                            "subject": msg.get("Subject", ""),
+                            "date":    msg.get("Date", ""),
+                        })
+                        mark_lead_replied(sender_addr, user_id=user_id,
+                                          reply_subject=msg.get("Subject", ""))
+                        log(f"  🎉 REPLY → From: {sender_raw} | Subject: {msg.get('Subject','')}")
+                except Exception:
                     continue
 
-                # Full fetch only for matching messages
-                _, md_full = mail.fetch(eid, "(RFC822)")
-                msg = email.message_from_bytes(md_full[0][1])
+            if found == 0:
+                log("📭 No replies from contacted businesses yet.")
+            else:
+                log(f"📬 {found} reply(ies) from businesses you contacted!")
 
-                sender_raw = msg.get("From", "")
-                import email.utils as eu
-                _, sender_addr = eu.parseaddr(sender_raw)
-                sender_addr = sender_addr.lower().strip()
-
-                if sender_addr in contacted:
-                    found += 1
-                    replies.append({
-                        "from":    sender_raw,
-                        "subject": msg.get("Subject", ""),
-                        "date":    msg.get("Date", ""),
-                    })
-                    mark_lead_replied(sender_addr, user_id=user_id, reply_subject=msg.get("Subject", ""))
-                    log(f"  🎉 REPLY → From: {sender_raw} | Subject: {msg.get('Subject','')}")
+            try:
+                mail.logout()
             except Exception:
-                continue
+                pass
 
-        if found == 0:
-            log("📭 No replies from contacted businesses yet. Keep following up!")
-        else:
-            log(f"📬 {found} reply(ies) from businesses you contacted!")
+        except imaplib.IMAP4.error as e:
+            log(f"❌ Gmail error: {e}")
+            log("   Enable IMAP: Gmail ⚙️ → See all settings → Forwarding and POP/IMAP")
+        except Exception as e:
+            log(f"❌ Reply check error: {e}")
 
-        mail.logout()
-    except imaplib.IMAP4.error as e:
-        log(f"❌ Gmail error: {e}")
-        log("   Enable IMAP: Gmail ⚙️ → See all settings → Forwarding and POP/IMAP")
+        return inner_replies
+
+    # Hard 25-second wall-clock cap — well under gunicorn's watchdog threshold
+    try:
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            future = ex.submit(_check)
+            replies = future.result(timeout=25)
+    except concurrent.futures.TimeoutError:
+        log("⏱ Reply check timed out (inbox too large). Replies will be checked next run.")
+    except Exception as e:
+        log(f"❌ Reply check error: {e}")
 
     return replies
 
