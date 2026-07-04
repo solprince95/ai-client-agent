@@ -356,6 +356,41 @@ def _extract_people(soup, all_emails, all_phones):
     return people[:5]
 
 
+def _hunter_lookup(domain):
+    """
+    Call Hunter.io Domain Search API to get verified people + emails for a domain.
+    Returns a list of {name, position, email, phone} dicts.
+    Requires HUNTER_API_KEY environment variable.
+    Free tier: 25 searches/month. Paid: from $49/month.
+    """
+    api_key = os.environ.get("HUNTER_API_KEY", "")
+    if not api_key or not domain:
+        return []
+    try:
+        r = requests.get(
+            "https://api.hunter.io/v2/domain-search",
+            params={"domain": domain, "api_key": api_key, "limit": 10},
+            timeout=(3, 8)
+        )
+        if r.status_code != 200:
+            return []
+        data = r.json().get("data", {})
+        people = []
+        for p in (data.get("emails") or []):
+            first = p.get("first_name", "") or ""
+            last  = p.get("last_name", "")  or ""
+            name  = (first + " " + last).strip()
+            people.append({
+                "name":     name,
+                "position": p.get("position") or p.get("department") or "",
+                "email":    (p.get("value") or "").lower().strip(),
+                "phone":    "",   # Hunter doesn't provide phone numbers
+            })
+        return [p for p in people if p["email"]]
+    except Exception:
+        return []
+
+
 def extract_contact_info(site_url):
     """
     Returns a dict with:
@@ -409,7 +444,24 @@ def extract_contact_info(site_url):
             soup = _scrape(text)
             all_soups.append(soup)
 
-    # Classify emails
+    # Try Hunter.io for verified people data (takes priority over heuristic scraping)
+    domain = urlparse(site_url).netloc.replace("www.", "")
+    hunter_people = _hunter_lookup(domain)
+
+    # Merge: Hunter results first, then fill up to 5 with heuristic results
+    if hunter_people:
+        # Use Hunter emails as the source of truth
+        all_emails.update(p["email"] for p in hunter_people if p.get("email"))
+        final_people = hunter_people[:5]
+    else:
+        # Fall back to heuristic extraction from page HTML
+        final_people = []
+        for soup in all_soups:
+            final_people = _extract_people(soup, all_emails, all_phones)
+            if final_people:
+                break
+
+    # Classify emails into company vs personal
     company_emails = [e for e in all_emails
                       if _COMPANY_PREFIXES.match(e.split("@")[0])
                       and "noreply" not in e and "no-reply" not in e]
@@ -422,18 +474,11 @@ def extract_contact_info(site_url):
                       else list(all_emails)[0] if all_emails
                       else None)
 
-    # Extract structured people records from all scraped pages
-    people_data = []
-    for soup in all_soups:
-        people_data = _extract_people(soup, all_emails, all_phones)
-        if people_data:
-            break
-
     return {
         "company_email": company_email,
-        "people_data":   people_data,
-        "people_emails": [p["email"] for p in people_data if p.get("email")] or people_emails[:5],
-        "people_phones": [p["phone"] for p in people_data if p.get("phone")] or list(all_phones)[:5],
+        "people_data":   final_people,
+        "people_emails": [p["email"] for p in final_people if p.get("email")] or people_emails[:5],
+        "people_phones": [p["phone"] for p in final_people if p.get("phone")] or list(all_phones)[:5],
     }
 
 
@@ -1018,7 +1063,7 @@ def send_to_selected_leads(lead_ids, config, log=_noop, user_id=None):
     if config.get("GMAIL_APP_PASSWORD"):
         check_replies(config, log=log, user_id=user_id)
     else:
-        log("📭 Add a Gmail App Password in Setup to enable automatic reply checking.")
+        log("📭 Reply checking skipped — add a Gmail App Password in Setup to track replies automatically.")
 
     log("✅ Send complete!")
     return {"ok": True, "sent": sent, "selected": len(lead_ids)}
@@ -1046,7 +1091,7 @@ def run_full_pipeline(config, log=_noop, user_id=None):
     if config.get("GMAIL_APP_PASSWORD"):
         check_replies(config, log=log, user_id=user_id)
     else:
-        log("📭 Add a Gmail App Password in Setup to enable automatic reply checking.")
+        log("📭 Reply checking skipped — add a Gmail App Password in Setup to track replies automatically.")
 
     log("✅ Run complete!")
     return {"ok": True, "found": len(biz), "with_sites": len(sites),
