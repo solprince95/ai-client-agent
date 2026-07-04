@@ -949,24 +949,28 @@ def check_replies(config, log=_noop, user_id=None):
         from datetime import timedelta
         inner_replies = []
         try:
-            # 10-second socket timeout so any single IMAP op can't hang forever
+            log("   [diag] Connecting to Gmail IMAP...")
             mail = imaplib.IMAP4_SSL("imap.gmail.com")
             mail.sock.settimeout(10)
+            log("   [diag] Logging in...")
             mail.login(config["GMAIL_ADDRESS"], config["GMAIL_APP_PASSWORD"].replace(" ", ""))
+            log("   [diag] Selecting inbox...")
             mail.select("inbox")
 
-            # Only search last 30 days — not the entire inbox
             since_date = (datetime.now() - timedelta(days=30)).strftime("%d-%b-%Y")
+            log(f"   [diag] Searching since {since_date}...")
             _, data = mail.search(None, f'(SINCE "{since_date}")')
             all_ids = data[0].split() if data[0] else []
+            log(f"   [diag] Found {len(all_ids)} emails in last 30 days. Scanning headers...")
 
             found = 0
-            for eid in all_ids:
+            for idx, eid in enumerate(all_ids):
                 try:
                     _, md = mail.fetch(eid, "(BODY[HEADER.FIELDS (FROM)])")
                     raw_from = md[0][1].decode(errors="ignore").lower()
                     if not any(em in raw_from for em in contacted):
                         continue
+                    log(f"   [diag] Match found at msg {idx+1}, fetching full message...")
                     _, md_full = mail.fetch(eid, "(RFC822)")
                     msg = email.message_from_bytes(md_full[0][1])
                     sender_raw = msg.get("From", "")
@@ -982,9 +986,11 @@ def check_replies(config, log=_noop, user_id=None):
                         mark_lead_replied(sender_addr, user_id=user_id,
                                           reply_subject=msg.get("Subject", ""))
                         log(f"  🎉 REPLY → From: {sender_raw} | Subject: {msg.get('Subject','')}")
-                except Exception:
+                except Exception as row_e:
+                    log(f"   [diag] Error on msg {idx+1}: {row_e}")
                     continue
 
+            log(f"   [diag] Scan complete. Logging out...")
             if found == 0:
                 log("📭 No replies from contacted businesses yet.")
             else:
