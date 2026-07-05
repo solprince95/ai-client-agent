@@ -944,7 +944,6 @@ def check_replies(config, log=_noop, user_id=None):
         return replies
 
     def _check():
-        import socket
         import email.utils as eu
         from datetime import timedelta
         inner_replies = []
@@ -1037,17 +1036,9 @@ def check_replies(config, log=_noop, user_id=None):
 
         return inner_replies
 
-    # Hard 25-second wall-clock cap — well under gunicorn's watchdog threshold
-    try:
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-            future = ex.submit(_check)
-            replies = future.result(timeout=25)
-    except concurrent.futures.TimeoutError:
-        log("⏱ Reply check timed out (inbox too large). Replies will be checked next run.")
-    except Exception as e:
-        log(f"❌ Reply check error: {e}")
-
+    # Run directly — the caller (api_check_replies) already runs us in a
+    # daemon thread. The IMAP socket timeout (10s per op) prevents hangs.
+    replies = _check()
     return replies
 
 
