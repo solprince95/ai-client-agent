@@ -664,12 +664,15 @@ function startPolling() {
   clearInterval(_pollInterval);
   const btn    = document.getElementById('run-btn');
   const logBox = document.getElementById('log-box');
+  let   pollCount = 0;
 
   _pollTimer = setInterval(async () => {
     try {
       const res  = await fetch('/api/poll');
       const data = await res.json();
       if (!data.ok) return;
+
+      pollCount++;
 
       // Append new lines
       if (data.lines && data.lines.length) {
@@ -678,7 +681,11 @@ function startPolling() {
         btn.textContent = _runMode === 'send' ? ' Sending...' : ' Searching...';
       }
 
-      if (data.done || (!data.running && !data.lines.length)) {
+      // Only stop if server explicitly says done, OR we've polled at least
+      // 3 times and running has gone false (avoids false-stop on first poll
+      // before the background thread has started setting running=True).
+      const isDone = data.done || (pollCount >= 3 && !data.running && !data.lines.length);
+      if (isDone) {
         clearInterval(_pollTimer);
         btn.disabled = false;
         btn.textContent = '▶ Find Businesses';

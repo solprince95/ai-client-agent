@@ -527,10 +527,9 @@ def api_log_buffer():
 @login_required
 def api_poll():
     """
-    Replaces SSE. The browser calls this every second while a run is active.
+    The browser calls this every second while a run is active.
     Returns all log lines queued since the last poll, plus running/done status.
     Never blocks — drains the queue instantly and returns.
-    This avoids the gunicorn gthread watchdog killing blocked threads.
     """
     uid = session["user_id"]
     state = get_user_state(uid)
