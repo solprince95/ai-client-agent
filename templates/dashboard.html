@@ -646,25 +646,24 @@ let _runMode = 'discover';
 let _pollTimer = null;
 
 async function checkReplies() {
-  const btn  = document.getElementById('check-replies-btn');
-  const note = document.getElementById('replies-note');
+  const btn    = document.getElementById('check-replies-btn');
+  const note   = document.getElementById('replies-note');
+  const logBox = document.getElementById('log-box');
   btn.disabled = true; btn.textContent = '⏳ Checking...';
   note.style.display = 'none';
-  console.log('[checkReplies] button clicked, calling /api/check-replies');
+  logBox.style.display = 'block';
+  logBox.textContent = '';
   try {
     const res  = await fetch('/api/check-replies', {method: 'POST'});
     const data = await res.json();
-    console.log('[checkReplies] /api/check-replies response:', data);
     if (!data.ok) {
-      note.textContent = data.message || 'Could not start reply check.';
-      note.style.display = 'block';
+      logBox.textContent = '❌ ' + (data.message || 'Could not start reply check.');
       btn.disabled = false; btn.textContent = '✉ Check Replies';
       return;
     }
     _runMode = 'replies';
     startPolling();
   } catch(e) {
-    console.log('[checkReplies] error:', e);
     btn.disabled = false; btn.textContent = '✉ Check Replies';
   }
 }
