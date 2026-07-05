@@ -693,17 +693,15 @@ function startLogStream() {
 function startPolling() {
   clearInterval(_pollTimer);
   clearInterval(_pollInterval);
-  const btn    = document.getElementById('run-btn');
-  const logBox = document.getElementById('log-box');
-  let   pollCount = 0;
+  const btn      = document.getElementById('run-btn');
+  const logBox   = document.getElementById('log-box');
+  const startTime = Date.now();
 
   _pollTimer = setInterval(async () => {
     try {
       const res  = await fetch('/api/poll');
       const data = await res.json();
       if (!data.ok) return;
-
-      pollCount++;
 
       // Append new lines
       if (data.lines && data.lines.length) {
@@ -712,16 +710,22 @@ function startPolling() {
         btn.textContent = _runMode === 'send' ? ' Sending...' : ' Searching...';
       }
 
-      // Only stop if server explicitly says done, OR we've polled at least
-      // 3 times and running has gone false (avoids false-stop on first poll
-      // before the background thread has started setting running=True).
-      const isDone = data.done || (pollCount >= 3 && !data.running && !data.lines.length);
+      // Only two ways to stop:
+      // 1. Server sends explicit __DONE__ (data.done = true)
+      // 2. Agent not running AND no lines AND we've been polling for > 10s
+      //    (the 10s gap prevents stopping before the thread even starts)
+      const elapsed = Date.now() - startTime;
+      const isDone  = data.done || (!data.running && !data.lines.length && elapsed > 10000);
+
       if (isDone) {
         clearInterval(_pollTimer);
+        _pollTimer = null;
         btn.disabled = false;
         btn.textContent = '▶ Find Businesses';
         const repliesBtn = document.getElementById('check-replies-btn');
         if (repliesBtn) { repliesBtn.disabled = false; repliesBtn.textContent = '✉ Check Replies'; }
+        const resetBtn = document.getElementById('reset-btn');
+        if (resetBtn) resetBtn.style.display = 'none';
         _pollInterval = setInterval(loadStatus, 10000);
         loadStatus();
         setTimeout(() => {
