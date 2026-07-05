@@ -439,14 +439,22 @@ def api_check_replies():
     cfg = _build_config(profile)
 
     def _run():
+        import sys
         def log(message):
             msg = str(message)
             state["log_buffer"].append(msg)
             state["log_queue"].put(msg)
+            print(f"[CR] {msg}", file=sys.stderr, flush=True)
         try:
+            log("[diag] api_check_replies thread started")
+            log(f"[diag] gmail_app_password present: {bool(cfg.get('GMAIL_APP_PASSWORD'))}")
+            log(f"[diag] gmail_address: {cfg.get('GMAIL_ADDRESS','(empty)')}")
             agent_core.check_replies(cfg, log=log, user_id=uid)
+            log("[diag] api_check_replies thread finished normally")
         except Exception as e:
             log(f"❌ Unexpected error: {e}")
+            import traceback
+            print(traceback.format_exc(), file=sys.stderr, flush=True)
         finally:
             log("__DONE__")
             state["running"] = False

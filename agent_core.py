@@ -1036,9 +1036,9 @@ def check_replies(config, log=_noop, user_id=None):
 
         return inner_replies
 
-    # Run directly — the caller (api_check_replies) already runs us in a
-    # daemon thread. The IMAP socket timeout (10s per op) prevents hangs.
+    log("[diag] check_replies entered")
     replies = _check()
+    log("[diag] check_replies _check() returned")
     return replies
 
 
