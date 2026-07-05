@@ -523,6 +523,18 @@ def api_log_buffer():
                     "running": state.get("running", False)})
 
 
+@app.route("/api/reset", methods=["POST"])
+@login_required
+def api_reset():
+    """Force-clears the running state if the agent got stuck."""
+    uid = session["user_id"]
+    state = get_user_state(uid)
+    state["running"] = False
+    state["log_queue"] = queue.Queue()
+    state["log_buffer"] = []
+    return jsonify({"ok": True})
+
+
 @app.route("/api/poll")
 @login_required
 def api_poll():
