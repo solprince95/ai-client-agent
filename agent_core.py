@@ -948,19 +948,15 @@ def check_replies(config, log=_noop, user_id=None):
         from datetime import timedelta
         inner_replies = []
         try:
-            log("   [diag] Connecting to Gmail IMAP...")
             mail = imaplib.IMAP4_SSL("imap.gmail.com")
             mail.sock.settimeout(10)
-            log("   [diag] Logging in...")
             mail.login(config["GMAIL_ADDRESS"], config["GMAIL_APP_PASSWORD"].replace(" ", ""))
-            log("   [diag] Selecting inbox...")
             mail.select("inbox")
 
             since_date = (datetime.now() - timedelta(days=30)).strftime("%d-%b-%Y")
-            log(f"   [diag] Searching since {since_date}...")
             _, data = mail.search(None, f'(SINCE "{since_date}")')
             all_ids = data[0].split() if data[0] else []
-            log(f"   [diag] Found {len(all_ids)} emails in last 30 days.")
+            log(f"   Scanning {len(all_ids)} emails from the last 30 days...")
 
             if not all_ids:
                 log("📭 No emails in the last 30 days.")
@@ -970,9 +966,7 @@ def check_replies(config, log=_noop, user_id=None):
             # Fetch ALL From headers in one single IMAP call (not one per email)
             # Format: "1,2,3,4,..." — IMAP supports comma-separated ID sets
             id_set = b",".join(all_ids)
-            log(f"   [diag] Fetching all headers in one call...")
             _, header_data = mail.fetch(id_set, "(BODY[HEADER.FIELDS (FROM)])")
-            log(f"   [diag] Headers received. Scanning for matches...")
 
             # header_data is a flat list: [header_bytes, separator, header_bytes, ...]
             # Extract From values and check against contacted list
@@ -994,7 +988,7 @@ def check_replies(config, log=_noop, user_id=None):
                 except Exception:
                     continue
 
-            log(f"   [diag] Found {len(matching_ids)} matching message(s). Fetching full content...")
+            log(f"   Found {len(matching_ids)} potential reply(ies). Verifying...")
 
             found = 0
             for eid in matching_ids:
@@ -1017,7 +1011,6 @@ def check_replies(config, log=_noop, user_id=None):
                 except Exception:
                     continue
 
-            log(f"   [diag] Scan complete. Logging out...")
             if found == 0:
                 log("📭 No replies from contacted businesses yet.")
             else:
@@ -1036,9 +1029,7 @@ def check_replies(config, log=_noop, user_id=None):
 
         return inner_replies
 
-    log("[diag] check_replies entered")
     replies = _check()
-    log("[diag] check_replies _check() returned")
     return replies
 
 

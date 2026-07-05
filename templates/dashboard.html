@@ -650,19 +650,21 @@ async function checkReplies() {
   const note = document.getElementById('replies-note');
   btn.disabled = true; btn.textContent = '⏳ Checking...';
   note.style.display = 'none';
+  console.log('[checkReplies] button clicked, calling /api/check-replies');
   try {
     const res  = await fetch('/api/check-replies', {method: 'POST'});
     const data = await res.json();
+    console.log('[checkReplies] /api/check-replies response:', data);
     if (!data.ok) {
       note.textContent = data.message || 'Could not start reply check.';
       note.style.display = 'block';
       btn.disabled = false; btn.textContent = '✉ Check Replies';
       return;
     }
-    // Reuse the polling loop — check-replies runs in same background thread
     _runMode = 'replies';
     startPolling();
   } catch(e) {
+    console.log('[checkReplies] error:', e);
     btn.disabled = false; btn.textContent = '✉ Check Replies';
   }
 }
@@ -701,13 +703,17 @@ function startPolling() {
     try {
       const res  = await fetch('/api/poll');
       const data = await res.json();
+      console.log('[poll]', {done: data.done, running: data.running, lines: data.lines?.length, elapsed: Math.round((Date.now()-startTime)/1000)+'s'});
       if (!data.ok) return;
 
-      // Append new lines
+      // Append new lines — filter out [diag] lines (those are for Render logs only)
       if (data.lines && data.lines.length) {
-        logBox.textContent += data.lines.join('\n') + '\n';
-        logBox.scrollTop = logBox.scrollHeight;
-        btn.textContent = _runMode === 'send' ? ' Sending...' : ' Searching...';
+        const userLines = data.lines.filter(l => !l.includes('[diag]'));
+        if (userLines.length) {
+          logBox.textContent += userLines.join('\n') + '\n';
+          logBox.scrollTop = logBox.scrollHeight;
+        }
+        btn.textContent = _runMode === 'send' ? ' Sending...' : _runMode === 'replies' ? '⏳ Checking...' : ' Searching...';
       }
 
       // Only two ways to stop:
@@ -723,7 +729,13 @@ function startPolling() {
         btn.disabled = false;
         btn.textContent = '▶ Find Businesses';
         const repliesBtn = document.getElementById('check-replies-btn');
-        if (repliesBtn) { repliesBtn.disabled = false; repliesBtn.textContent = '✉ Check Replies'; }
+        if (repliesBtn) {
+          repliesBtn.disabled = false;
+          repliesBtn.textContent = _runMode === 'replies' ? '✉ Check Replies ✓' : '✉ Check Replies';
+          if (_runMode === 'replies') {
+            setTimeout(() => { repliesBtn.textContent = '✉ Check Replies'; }, 3000);
+          }
+        }
         const resetBtn = document.getElementById('reset-btn');
         if (resetBtn) resetBtn.style.display = 'none';
         _pollInterval = setInterval(loadStatus, 10000);
