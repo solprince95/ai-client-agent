@@ -1000,14 +1000,24 @@ def check_replies(config, log=_noop, user_id=None):
                     sender_addr = sender_addr.lower().strip()
                     if sender_addr in contacted:
                         found += 1
+                        # Decode encoded subject (e.g. =?UTF-8?B?...?=)
+                        from email.header import decode_header as _dh
+                        raw_subject = msg.get("Subject", "")
+                        decoded_parts = _dh(raw_subject)
+                        subject_str = ""
+                        for part, enc in decoded_parts:
+                            if isinstance(part, bytes):
+                                subject_str += part.decode(enc or "utf-8", errors="replace")
+                            else:
+                                subject_str += part
                         inner_replies.append({
                             "from":    sender_raw,
-                            "subject": msg.get("Subject", ""),
+                            "subject": subject_str,
                             "date":    msg.get("Date", ""),
                         })
                         mark_lead_replied(sender_addr, user_id=user_id,
-                                          reply_subject=msg.get("Subject", ""))
-                        log(f"  🎉 REPLY → From: {sender_raw} | Subject: {msg.get('Subject','')}")
+                                          reply_subject=subject_str)
+                        log(f"  🎉 REPLY from {sender_raw} — \"{subject_str}\"")
                 except Exception:
                     continue
 
