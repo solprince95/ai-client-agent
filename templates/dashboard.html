@@ -31,6 +31,8 @@
   .run-btn { background: #1a56db; color: #fff; border: none; padding: 1rem 3rem; border-radius: 12px; font-size: 1.1rem; font-weight: 700; cursor: pointer; }
   .run-btn:disabled { background: #aaa; cursor: not-allowed; }
   .run-note { color: #888; font-size: 0.85rem; margin-top: 0.75rem; }
+  .check-replies-btn { background: #fff; color: #1a56db; border: 1.5px solid #1a56db; padding: 0.6rem 1.4rem; border-radius: 8px; font-size: 0.85rem; font-weight: 700; cursor: pointer; margin-top: 1rem; }
+  .check-replies-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   #log-box { background: #0d1b2a; color: #a8d8a8; font-family: monospace; font-size: 0.82rem; padding: 1rem; border-radius: 10px; min-height: 200px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; line-height: 1.6; display: none; margin-top: 1rem; }
   .billing-card { background: #f0f4ff; border-radius: 12px; padding: 1.5rem; border: 2px solid #1a56db; text-align: center; }
   .billing-price { font-size: 2.5rem; font-weight: 800; color: #1a56db; }
@@ -153,6 +155,8 @@
           This finds businesses, their email and phone number — it does <strong>not</strong> send anything yet.
           Review and pick who to email in the <strong>Leads</strong> tab afterwards.
         </p>
+        <button class="check-replies-btn" id="check-replies-btn" onclick="checkReplies()">✉ Check Replies</button>
+        <p class="run-note" id="replies-note" style="display:none;"></p>
       </div>
       <div id="log-box"></div>
     </div>
@@ -612,7 +616,27 @@ let _pollInterval = null;
 let _runMode = 'discover';
 let _pollTimer = null;
 
-async function runAgent() {
+async function checkReplies() {
+  const btn  = document.getElementById('check-replies-btn');
+  const note = document.getElementById('replies-note');
+  btn.disabled = true; btn.textContent = '⏳ Checking...';
+  note.style.display = 'none';
+  try {
+    const res  = await fetch('/api/check-replies', {method: 'POST'});
+    const data = await res.json();
+    if (!data.ok) {
+      note.textContent = data.message || 'Could not start reply check.';
+      note.style.display = 'block';
+      btn.disabled = false; btn.textContent = '✉ Check Replies';
+      return;
+    }
+    // Reuse the polling loop — check-replies runs in same background thread
+    _runMode = 'replies';
+    startPolling();
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '✉ Check Replies';
+  }
+}
   const btn    = document.getElementById('run-btn');
   const logBox = document.getElementById('log-box');
   btn.disabled = true; btn.textContent = ' Searching...';
@@ -658,10 +682,11 @@ function startPolling() {
         clearInterval(_pollTimer);
         btn.disabled = false;
         btn.textContent = '▶ Find Businesses';
+        const repliesBtn = document.getElementById('check-replies-btn');
+        if (repliesBtn) { repliesBtn.disabled = false; repliesBtn.textContent = '✉ Check Replies'; }
         _pollInterval = setInterval(loadStatus, 10000);
         loadStatus();
         setTimeout(() => {
-          
           loadLeads();
           if (_runMode === 'discover') switchTab('leads');
           _runMode = 'discover';

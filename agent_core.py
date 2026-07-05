@@ -1086,12 +1086,7 @@ def send_to_selected_leads(lead_ids, config, log=_noop, user_id=None):
     log(f"Sending personalised emails to {len(businesses)} selected lead(s)...")
     sent = send_all(businesses, config, log=log, user_id=user_id)
 
-    if config.get("GMAIL_APP_PASSWORD"):
-        check_replies(config, log=log, user_id=user_id)
-    else:
-        log("📭 Reply checking skipped — add a Gmail App Password in Setup to track replies automatically.")
-
-    log("✅ Send complete!")
+    log(f"✅ Send complete! Go to the Leads tab to see updated statuses.")
     return {"ok": True, "sent": sent, "selected": len(lead_ids)}
 
 
