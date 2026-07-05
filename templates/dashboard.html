@@ -637,6 +637,8 @@ async function checkReplies() {
     btn.disabled = false; btn.textContent = '✉ Check Replies';
   }
 }
+
+async function runAgent() {
   const btn    = document.getElementById('run-btn');
   const logBox = document.getElementById('log-box');
   btn.disabled = true; btn.textContent = ' Searching...';
