@@ -961,16 +961,45 @@ def check_replies(config, log=_noop, user_id=None):
             log(f"   [diag] Searching since {since_date}...")
             _, data = mail.search(None, f'(SINCE "{since_date}")')
             all_ids = data[0].split() if data[0] else []
-            log(f"   [diag] Found {len(all_ids)} emails in last 30 days. Scanning headers...")
+            log(f"   [diag] Found {len(all_ids)} emails in last 30 days.")
+
+            if not all_ids:
+                log("📭 No emails in the last 30 days.")
+                mail.logout()
+                return inner_replies
+
+            # Fetch ALL From headers in one single IMAP call (not one per email)
+            # Format: "1,2,3,4,..." — IMAP supports comma-separated ID sets
+            id_set = b",".join(all_ids)
+            log(f"   [diag] Fetching all headers in one call...")
+            _, header_data = mail.fetch(id_set, "(BODY[HEADER.FIELDS (FROM)])")
+            log(f"   [diag] Headers received. Scanning for matches...")
+
+            # header_data is a flat list: [header_bytes, separator, header_bytes, ...]
+            # Extract From values and check against contacted list
+            matching_ids = []
+            for j in range(0, len(header_data), 2):
+                try:
+                    raw = header_data[j]
+                    if not isinstance(raw, tuple):
+                        continue
+                    # Extract the email ID from the response metadata
+                    meta = raw[0].decode(errors="ignore")
+                    eid_match = re.search(r'^(\d+)', meta)
+                    if not eid_match:
+                        continue
+                    eid = eid_match.group(1).encode()
+                    from_line = raw[1].decode(errors="ignore").lower()
+                    if any(em in from_line for em in contacted):
+                        matching_ids.append(eid)
+                except Exception:
+                    continue
+
+            log(f"   [diag] Found {len(matching_ids)} matching message(s). Fetching full content...")
 
             found = 0
-            for idx, eid in enumerate(all_ids):
+            for eid in matching_ids:
                 try:
-                    _, md = mail.fetch(eid, "(BODY[HEADER.FIELDS (FROM)])")
-                    raw_from = md[0][1].decode(errors="ignore").lower()
-                    if not any(em in raw_from for em in contacted):
-                        continue
-                    log(f"   [diag] Match found at msg {idx+1}, fetching full message...")
                     _, md_full = mail.fetch(eid, "(RFC822)")
                     msg = email.message_from_bytes(md_full[0][1])
                     sender_raw = msg.get("From", "")
@@ -986,8 +1015,7 @@ def check_replies(config, log=_noop, user_id=None):
                         mark_lead_replied(sender_addr, user_id=user_id,
                                           reply_subject=msg.get("Subject", ""))
                         log(f"  🎉 REPLY → From: {sender_raw} | Subject: {msg.get('Subject','')}")
-                except Exception as row_e:
-                    log(f"   [diag] Error on msg {idx+1}: {row_e}")
+                except Exception:
                     continue
 
             log(f"   [diag] Scan complete. Logging out...")
