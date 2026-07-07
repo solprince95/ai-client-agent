@@ -706,32 +706,33 @@ def upsert_leads(businesses, config, log=_noop, user_id=None):
 
     for row in rows:
         try:
-            # Try to update first (no-op if the row doesn't exist yet)
-            res = sb.table("leads").update({
-                "business_name": row["business_name"],
-                "address":       row.get("address"),
-                "website":       row.get("website"),
-                "phone":         row.get("phone"),
-                "people_emails": row.get("people_emails"),
-                "people_phones": row.get("people_phones"),
-                "people_data":   row.get("people_data"),
-                "match_score":   row.get("match_score"),
-                "business_type": row.get("business_type"),
-                "city":          row.get("city"),
-                # Never regress a lead that's already past 'discovered'
-                # We can't do conditional updates easily, so we fetch status first
-            }).eq("user_id", row["user_id"]).eq("email", row["email"]).select().execute()
+            # Check if this lead already exists
+            exists = sb.table("leads").select("id,status") \
+                       .eq("user_id", row["user_id"]) \
+                       .eq("email", row["email"]).execute()
 
-            if res.data:
-                # Row existed — check if we need to preserve its status
-                existing_status = res.data[0].get("status", "discovered")
+            if exists.data:
+                # Row exists — update it, preserving status if past 'discovered'
+                existing_status = exists.data[0].get("status", "discovered")
+                update_row = {
+                    "business_name": row["business_name"],
+                    "address":       row.get("address"),
+                    "website":       row.get("website"),
+                    "phone":         row.get("phone"),
+                    "people_emails": row.get("people_emails"),
+                    "people_phones": row.get("people_phones"),
+                    "people_data":   row.get("people_data"),
+                    "match_score":   row.get("match_score"),
+                    "business_type": row.get("business_type"),
+                    "city":          row.get("city"),
+                }
                 if existing_status not in ("discovered", None):
-                    # Re-apply the preserved status (update above clobbered it)
-                    sb.table("leads").update({"status": existing_status}) \
-                      .eq("user_id", row["user_id"]).eq("email", row["email"]).select().execute()
+                    update_row["status"] = existing_status
+                sb.table("leads").update(update_row) \
+                  .eq("user_id", row["user_id"]).eq("email", row["email"]).execute()
                 updated += 1
             else:
-                # Row didn't exist — insert it fresh
+                # New lead — insert it
                 sb.table("leads").insert(row).execute()
                 inserted += 1
         except Exception as e:
@@ -743,6 +744,8 @@ def upsert_leads(businesses, config, log=_noop, user_id=None):
             else:
                 errors += 1
                 print(f"upsert_leads row error ({row.get('email')}): {e}", flush=True)
+                if errors <= 3:
+                    log(f"  Save error: {str(e)[:140]}")
 
     msg = f"📇 {inserted} new + {updated} updated lead(s) saved to your CRM."
     if errors:
