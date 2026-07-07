@@ -720,7 +720,7 @@ def upsert_leads(businesses, config, log=_noop, user_id=None):
                 "city":          row.get("city"),
                 # Never regress a lead that's already past 'discovered'
                 # We can't do conditional updates easily, so we fetch status first
-            }).eq("user_id", row["user_id"]).eq("email", row["email"]).execute()
+            }).eq("user_id", row["user_id"]).eq("email", row["email"]).select().execute()
 
             if res.data:
                 # Row existed — check if we need to preserve its status
@@ -728,7 +728,7 @@ def upsert_leads(businesses, config, log=_noop, user_id=None):
                 if existing_status not in ("discovered", None):
                     # Re-apply the preserved status (update above clobbered it)
                     sb.table("leads").update({"status": existing_status}) \
-                      .eq("user_id", row["user_id"]).eq("email", row["email"]).execute()
+                      .eq("user_id", row["user_id"]).eq("email", row["email"]).select().execute()
                 updated += 1
             else:
                 # Row didn't exist — insert it fresh
