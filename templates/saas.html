@@ -349,6 +349,23 @@ nav {
   padding: 3px 8px; border-radius: 6px;
   pointer-events: none;
 }
+.video-unmute {
+  position: absolute;
+  top: 14px; right: 14px;
+  background: rgba(0,0,0,.65);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.15);
+  color: var(--t1);
+  font-size: .72rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: all .2s;
+  letter-spacing: .02em;
+}
+.video-unmute:hover { background: var(--blue); border-color: var(--blue); }
+.video-unmute.hidden { display: none; }
 
 /* ─── Trust strip ─────────────────────────────────────── */
 .trust {
@@ -812,8 +829,9 @@ footer {
   <div class="video-wrap">
     <video
       id="tutorial-video"
-      preload="metadata"
+      preload="auto"
       playsinline
+      autoplay
       controls
       src="/static/tutorial.mp4"
     ></video>
@@ -1159,7 +1177,7 @@ function countUp(el, target, dur=1600) {
   requestAnimationFrame(tick);
 }
 setTimeout(() => {
-  countUp(document.getElementById('big-cnt'), 2841);
+  countUp(document.getElementById('big-cnt'), 183);
   
 }, 500);
 
@@ -1189,25 +1207,14 @@ document.querySelectorAll('.reveal').forEach(el => io.observe(el));
 const vid     = document.getElementById('tutorial-video');
 const overlay = document.getElementById('video-overlay');
 
-function playVideo() {
-  vid.play();
-  overlay.classList.add('hidden');
-}
+function playVideo() { vid.play(); overlay.classList.add('hidden'); }
 
-vid.addEventListener('pause', () => {
-  // Only show overlay if video hasn't ended
-  if (!vid.ended) overlay.classList.remove('hidden');
-});
-vid.addEventListener('ended', () => {
-  overlay.classList.remove('hidden');
-});
-vid.addEventListener('play', () => {
-  overlay.classList.add('hidden');
-});
-// Hide overlay when user uses native controls to play
-vid.addEventListener('click', () => {
-  if (vid.paused) vid.play();
-});
+overlay.classList.add('hidden');
+
+vid.addEventListener('pause', () => { if (!vid.ended) overlay.classList.remove('hidden'); });
+vid.addEventListener('ended', () => { overlay.classList.remove('hidden'); });
+vid.addEventListener('play',  () => { overlay.classList.add('hidden'); });
+vid.play().catch(() => { overlay.classList.remove('hidden'); });
 
 
 const nav = document.getElementById('nav');
