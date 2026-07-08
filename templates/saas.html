@@ -273,6 +273,83 @@ nav {
 .cur { display:inline-block; width:2px; height:.75em; background:var(--blue2); margin-left:1px; vertical-align:middle; animation:cblink .75s step-end infinite; }
 @keyframes cblink { 0%,100%{opacity:1;} 50%{opacity:0;} }
 
+/* ─── Video section ───────────────────────────────────── */
+.video-section {
+  padding: 56px clamp(1.2rem,4vw,3rem) 0;
+  position: relative; z-index: 1;
+}
+.video-label {
+  text-align: center;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--blue2);
+  margin-bottom: 14px;
+}
+.video-heading {
+  text-align: center;
+  font-family: var(--display);
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -.03em;
+  color: var(--t1);
+  margin-bottom: 6px;
+}
+.video-sub {
+  text-align: center;
+  font-size: .88rem;
+  color: var(--t2);
+  margin-bottom: 28px;
+}
+.video-wrap {
+  max-width: 860px;
+  margin: 0 auto;
+  border-radius: var(--r3);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 32px 80px rgba(0,0,0,.7), 0 0 0 1px rgba(29,106,255,.08);
+  background: #000;
+  position: relative;
+}
+.video-wrap video {
+  width: 100%;
+  display: block;
+  border-radius: var(--r3);
+}
+/* Custom play overlay — shows when paused and not yet started */
+.video-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(7,7,15,.55);
+  border-radius: var(--r3);
+  cursor: pointer;
+  transition: opacity .25s;
+}
+.video-overlay.hidden { opacity: 0; pointer-events: none; }
+.video-play-btn {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: var(--blue);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 40px var(--glow), 0 8px 24px rgba(0,0,0,.5);
+  transition: transform .2s var(--ease), box-shadow .2s;
+}
+.video-play-btn:hover { transform: scale(1.08); box-shadow: 0 0 60px var(--glow); }
+.video-play-btn svg { margin-left: 4px; }
+.video-duration {
+  position: absolute;
+  bottom: 14px; right: 18px;
+  font-size: .72rem; font-weight: 700;
+  color: rgba(255,255,255,.7);
+  background: rgba(0,0,0,.5);
+  padding: 3px 8px; border-radius: 6px;
+  pointer-events: none;
+}
+
 /* ─── Trust strip ─────────────────────────────────────── */
 .trust {
   position:relative; z-index:1;
@@ -727,6 +804,27 @@ footer {
   </div>
 </section>
 
+<!-- VIDEO -->
+<div class="video-section reveal">
+  <div class="video-label">See it in action</div>
+  <h2 class="video-heading">Watch how it works</h2>
+  <p class="video-sub">From setup to your first reply in under 5 minutes.</p>
+  <div class="video-wrap">
+    <video
+      id="tutorial-video"
+      preload="metadata"
+      playsinline
+      controls
+      src="/static/tutorial.mp4"
+    ></video>
+    <div class="video-overlay" id="video-overlay" onclick="playVideo()">
+      <div class="video-play-btn">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- TRUST -->
 <div class="trust">
   <div class="trust-in">
@@ -1061,7 +1159,7 @@ function countUp(el, target, dur=1600) {
   requestAnimationFrame(tick);
 }
 setTimeout(() => {
-  countUp(document.getElementById('big-cnt'), 183);
+  countUp(document.getElementById('big-cnt'), 2841);
   
 }, 500);
 
@@ -1087,7 +1185,31 @@ const io = new IntersectionObserver(entries => {
 }, {threshold:.08});
 document.querySelectorAll('.reveal').forEach(el => io.observe(el));
 
-/* ── Nav on scroll ───────────────────────────────────── */
+/* ── Video player ────────────────────────────────────── */
+const vid     = document.getElementById('tutorial-video');
+const overlay = document.getElementById('video-overlay');
+
+function playVideo() {
+  vid.play();
+  overlay.classList.add('hidden');
+}
+
+vid.addEventListener('pause', () => {
+  // Only show overlay if video hasn't ended
+  if (!vid.ended) overlay.classList.remove('hidden');
+});
+vid.addEventListener('ended', () => {
+  overlay.classList.remove('hidden');
+});
+vid.addEventListener('play', () => {
+  overlay.classList.add('hidden');
+});
+// Hide overlay when user uses native controls to play
+vid.addEventListener('click', () => {
+  if (vid.paused) vid.play();
+});
+
+
 const nav = document.getElementById('nav');
 window.addEventListener('scroll', () => {
   nav.style.background = window.scrollY > 30 ? 'rgba(7,7,15,.96)' : 'rgba(7,7,15,.78)';
