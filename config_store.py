@@ -31,6 +31,15 @@ DEFAULT_CONFIG = {
     "GMAIL_ADDRESS":       "",
     "GMAIL_APP_PASSWORD":  "",
 
+    # WhatsApp Cloud API (Meta) — filled in once the user connects via
+    # the Embedded Signup flow (not built yet). Left blank = WhatsApp
+    # sending is skipped gracefully (see whatsapp_agent.whatsapp_configured).
+    "WHATSAPP_ACCESS_TOKEN":   "",
+    "WHATSAPP_PHONE_NUMBER_ID": "",
+    "WHATSAPP_BUSINESS_ACCOUNT_ID": "",
+    "WHATSAPP_TEMPLATE_NAME":  "business_outreach_intro",
+    "WHATSAPP_TEMPLATE_LANG":  "en_US",
+
     "ATTACHMENT_PATH": "",
     "ATTACHMENT_NAME": "Portfolio.pdf",
 

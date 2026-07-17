@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard: AI Client Agent</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f0f4ff; color: #1a1a2e; min-height: 100vh; }
+  nav { background: #1a56db; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; }
+  .logo { font-size: 1.1rem; font-weight: 700; color: #fff; }
+  .nav-right { display: flex; align-items: center; gap: 1rem; }
+  .trial-badge { background: rgba(255,255,255,0.2); color: #fff; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.82rem; font-weight: 600; }
+  .logout-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 0.4rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+  .container { max-width: 900px; margin: 0 auto; padding: 2rem 1rem; }
+  .tabs { display: flex; gap: 0.5rem; margin-bottom: 2rem; background: #fff; padding: 0.4rem; border-radius: 10px; border: 1px solid #dde3ff; }
+  .tab { flex: 1; padding: 0.6rem; text-align: center; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 600; color: #888; border: none; background: none; }
+  .tab.active { background: #1a56db; color: #fff; }
+  .card { background: #fff; border-radius: 14px; padding: 1.5rem; margin-bottom: 1.5rem; border: 1px solid #dde3ff; }
+  .card h3 { font-size: 1.1rem; margin-bottom: 1rem; color: #1a1a2e; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+  .form-group.full { grid-column: 1 / -1; }
+  label { font-size: 0.85rem; font-weight: 600; color: #555; }
+  input, textarea { padding: 0.7rem 0.9rem; border: 1.5px solid #dde3ff; border-radius: 8px; font-size: 0.9rem; outline: none; font-family: inherit; }
+  input:focus, textarea:focus { border-color: #1a56db; }
+  textarea { resize: vertical; min-height: 80px; }
+  .save-btn { background: #1a56db; color: #fff; border: none; padding: 0.75rem 2rem; border-radius: 8px; font-size: 0.95rem; font-weight: 700; cursor: pointer; }
+  .save-msg { font-size: 0.85rem; color: #27ae60; margin-left: 1rem; display: none; }
+  .run-section { text-align: center; padding: 1rem 0; }
+  .run-btn { background: #1a56db; color: #fff; border: none; padding: 1rem 3rem; border-radius: 12px; font-size: 1.1rem; font-weight: 700; cursor: pointer; }
+  .run-btn:disabled { background: #aaa; cursor: not-allowed; }
+  .run-note { color: #888; font-size: 0.85rem; margin-top: 0.75rem; }
+  #log-box { background: #0d1b2a; color: #a8d8a8; font-family: monospace; font-size: 0.82rem; padding: 1rem; border-radius: 10px; min-height: 200px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; line-height: 1.6; display: none; margin-top: 1rem; }
+  .billing-card { background: #f0f4ff; border-radius: 12px; padding: 1.5rem; border: 2px solid #1a56db; text-align: center; }
+  .billing-price { font-size: 2.5rem; font-weight: 800; color: #1a56db; }
+  .billing-price span { font-size: 1rem; font-weight: 400; color: #888; }
+  .upi-id { background: #fff; border: 1.5px dashed #1a56db; border-radius: 8px; padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 700; color: #1a56db; margin: 1rem auto; display: inline-block; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .sent-list { display: flex; flex-direction: column; gap: 1rem; }
+  .sent-item { border: 1.5px solid #dde3ff; border-radius: 10px; overflow: hidden; }
+  .sent-header { display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1rem; background: #f7f9ff; cursor: pointer; gap: 1rem; }
+  .sent-header:hover { background: #eef1ff; }
+  .sent-meta { display: flex; flex-direction: column; gap: 0.2rem; flex: 1; }
+  .sent-name { font-weight: 700; font-size: 0.95rem; color: #1a1a2e; }
+  .sent-email { font-size: 0.8rem; color: #888; }
+  .sent-subject { font-size: 0.85rem; color: #555; margin-top: 0.15rem; }
+  .sent-date { font-size: 0.78rem; color: #aaa; white-space: nowrap; }
+  .sent-body { padding: 1rem; background: #fff; font-size: 0.88rem; line-height: 1.7; color: #333; border-top: 1px solid #eee; display: none; white-space: pre-wrap; }
+  .sent-body.open { display: block; }
+  .sent-toggle { font-size: 0.75rem; color: #1a56db; font-weight: 600; white-space: nowrap; }
+  .sent-empty { text-align: center; color: #aaa; padding: 3rem 1rem; font-size: 0.95rem; }
+  .sent-loading { text-align: center; color: #888; padding: 2rem; }
+  @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } }
+</style>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-2RWLQ2LHCL"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-2RWLQ2LHCL');
+</script>
+</head>
+<body>
+<nav>
+  <div class="logo"> AI Client Agent</div>
+  <div class="nav-right">
+    <span class="trial-badge" id="trial-badge"> 5 days trial</span>
+    <button class="logout-btn" onclick="logout()">Sign Out</button>
+  </div>
+</nav>
+<div class="container">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('run')"> Run Agent</button>
+    <button class="tab" onclick="switchTab('setup')"> Setup</button>
+    <button class="tab" onclick="switchTab('sent')"> Sent Emails</button>
+    <button class="tab" onclick="switchTab('billing')"> Billing</button>
+  </div>
+
+  <!-- RUN TAB -->
+  <div class="tab-content active" id="tab-run">
+    <div class="card">
+      <h3>Agent Status</h3>
+      <p id="status-msg" style="color:#555;margin-bottom:1rem;font-size:0.9rem;">Loading...</p>
+      <div class="run-section">
+        <button class="run-btn" id="run-btn" onclick="runAgent()" disabled>▶ Run Agent</button>
+        <p class="run-note" id="run-note">Complete your profile in Setup first.</p>
+      </div>
+      <div id="log-box"></div>
+    </div>
+  </div>
+
+  <!-- SETUP TAB -->
+  <div class="tab-content" id="tab-setup">
+    <div class="card">
+      <h3>Your Profile</h3>
+      <div class="form-row">
+        <div class="form-group"><label>Full Name</label><input type="text" id="full_name" placeholder="Your name"/></div>
+        <div class="form-group"><label>Business / Brand Name</label><input type="text" id="business_name" placeholder="Optional"/></div>
+        <div class="form-group"><label>Your Service</label><input type="text" id="your_service" placeholder="e.g. Website Design, Photography"/></div>
+        <div class="form-group"><label>Target City</label><input type="text" id="target_city" placeholder="e.g. Surat, Ahmedabad"/></div>
+        <div class="form-group full"><label>About You / Your Pitch</label><textarea id="your_about" placeholder="Brief description of your service..."></textarea></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Gmail Settings</h3>
+      <p style="font-size:0.85rem;color:#888;margin-bottom:1rem;">Your Gmail address is used as the sender name for outreach emails.</p>
+      <div class="form-row">
+        <div class="form-group full"><label>Gmail Address</label><input type="email" id="gmail" placeholder="your@gmail.com"/></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;">
+      <button class="save-btn" onclick="saveProfile()">Save Profile</button>
+      <span class="save-msg" id="save-msg">✅ Saved!</span>
+    </div>
+  </div>
+
+  <!-- SENT EMAILS TAB -->
+  <div class="tab-content" id="tab-sent">
+    <div class="card">
+      <h3> Sent Emails</h3>
+      <p style="font-size:0.85rem;color:#888;margin-bottom:1.25rem;">All emails sent by the agent on your behalf.</p>
+      <div id="sent-list" class="sent-list">
+        <div class="sent-loading">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BILLING TAB -->
+  <div class="tab-content" id="tab-billing">
+    <div class="card">
+      <h3>Your Plan</h3>
+      <div class="billing-card">
+        <div class="billing-price">₹999 <span>/ month</span></div>
+        <p style="color:#555;margin:0.75rem 0;font-size:0.95rem;">Unlimited campaigns · All features included</p>
+        <div id="billing-status"></div>
+        <div id="pay-section" style="display:none;">
+          <p style="color:#555;font-size:0.9rem;margin-top:1rem;">Pay via UPI to continue after trial:</p>
+          <img src="/static/qr.png" alt="UPI QR Code" style="width:200px;margin:1rem auto;display:block;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.1);"/>
+          <div class="upi-id"> sol.prince95@okicici</div>
+        </div>
+        <p style="font-size:0.88rem;color:#555;margin-top:0.75rem;">After payment, WhatsApp your screenshot to +91 9913620474 to get activated.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function switchTab(tab) {
+  const tabs = ['run','setup','sent','billing'];
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', tabs[i]===tab));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  if (tab === 'sent') loadSentEmails();
+}
+
+async function loadProfile() {
+  const res = await fetch('/api/profile');
+  const data = await res.json();
+  if (!data.ok) return;
+  const p = data.profile;
+  document.getElementById('full_name').value = p.full_name||'';
+  document.getElementById('business_name').value = p.business_name||'';
+  document.getElementById('your_service').value = p.your_service||'';
+  document.getElementById('your_about').value = p.your_about||'';
+  document.getElementById('target_city').value = p.target_city||'';
+  document.getElementById('gmail').value = p.gmail||'';
+  const days = p.days_left;
+  const badge = document.getElementById('trial-badge');
+  if (p.is_paid) { badge.textContent=' Active'; badge.style.background='rgba(39,174,96,0.3)'; }
+  else if (days>0) { badge.textContent=` ${days} day${days===1?'':'s'} left`; }
+  else { badge.textContent=' Trial ended'; badge.style.background='rgba(231,76,60,0.3)'; }
+  const billStatus = document.getElementById('billing-status');
+  const paySection = document.getElementById('pay-section');
+  if (p.is_paid) { billStatus.innerHTML='<p style="color:#27ae60;font-weight:700;"> Active Subscriber</p>'; }
+  else if (days>0) { billStatus.innerHTML=`<p style="color:#1a56db;font-weight:600;"> Free Trial. ${days} day${days===1?'':'s'} remaining</p>`; paySection.style.display='block'; }
+  else { billStatus.innerHTML='<p style="color:#e74c3c;font-weight:700;"> Trial Ended. Please pay to continue</p>'; paySection.style.display='block'; }
+}
+
+async function loadStatus() {
+  const res = await fetch('/api/status');
+  const data = await res.json();
+  if (!data.ok) return;
+  const btn = document.getElementById('run-btn');
+  const note = document.getElementById('run-note');
+  const msg = document.getElementById('status-msg');
+  if (!data.profile_complete) { msg.textContent=' Profile incomplete. Go to Setup tab.'; note.textContent='Complete your profile in Setup first.'; btn.disabled=true; }
+  else if (!data.is_paid && data.days_left<=0) { msg.textContent=' Trial ended. Upgrade in Billing tab.'; btn.disabled=true; }
+  else if (data.running) { msg.textContent=' Agent is running...'; btn.disabled=true; btn.textContent=' Running...'; }
+  else { msg.textContent=' Ready to run.'; btn.disabled=false; btn.textContent='▶ Run Agent'; note.textContent=`${data.days_left} trial day${data.days_left===1?'':'s'} remaining.`; }
+}
+
+async function saveProfile() {
+  const msg = document.getElementById('save-msg');
+  const btn = document.querySelector('.save-btn');
+  const data = {
+    full_name: document.getElementById('full_name').value,
+    business_name: document.getElementById('business_name').value,
+    your_service: document.getElementById('your_service').value,
+    your_about: document.getElementById('your_about').value,
+    target_city: document.getElementById('target_city').value,
+    gmail: document.getElementById('gmail').value
+  };
+  btn.disabled = true;
+  msg.style.display = 'inline';
+  msg.style.color = '#555';
+  msg.textContent = 'Saving...';
+  try {
+    const res = await fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    const result = await res.json();
+    if (res.status === 401) { window.location.href = '/'; return; }
+    if (result.ok) {
+      msg.style.color = '#27ae60';
+      msg.textContent = 'Saved!';
+      await loadProfile();
+      await loadStatus();
+    } else {
+      msg.style.color = '#c0392b';
+      msg.textContent = result.message || 'Could not save profile.';
+    }
+  } catch (e) {
+    msg.style.color = '#c0392b';
+    msg.textContent = 'Network error. Please try again.';
+  } finally {
+    btn.disabled = false;
+    setTimeout(()=>msg.style.display='none', 3500);
+  }
+}
+
+async function loadSentEmails() {
+  const container = document.getElementById('sent-list');
+  container.innerHTML = '<div class="sent-loading">Loading...</div>';
+  try {
+    const res = await fetch('/api/sent_emails');
+    const data = await res.json();
+    if (!data.ok) { container.innerHTML = '<div class="sent-empty">Could not load emails.</div>'; return; }
+    if (!data.emails || data.emails.length === 0) {
+      container.innerHTML = '<div class="sent-empty"> No emails sent yet. Run the agent to start sending!</div>';
+      return;
+    }
+    container.innerHTML = data.emails.map((e, i) => `
+      <div class="sent-item">
+        <div class="sent-header" onclick="toggleEmail(${i})">
+          <div class="sent-meta">
+            <div class="sent-name">${e.business_name || 'Unknown'}</div>
+            <div class="sent-email">${e.email}</div>
+            <div class="sent-subject">${e.subject ? ' ' + e.subject : ''}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.3rem;">
+            <div class="sent-date">${e.sent_date || ''}</div>
+            <div class="sent-toggle" id="toggle-${i}">▼ View Email</div>
+          </div>
+        </div>
+        <div class="sent-body" id="body-${i}">${e.body ? e.body.replace(/</g,'&lt;').replace(/>/g,'&gt;') : 'No content saved.'}</div>
+      </div>
+    `).join('');
+  } catch(err) {
+    container.innerHTML = '<div class="sent-empty">Error loading emails.</div>';
+  }
+}
+
+function toggleEmail(i) {
+  const body = document.getElementById('body-'+i);
+  const toggle = document.getElementById('toggle-'+i);
+  const isOpen = body.classList.toggle('open');
+  toggle.textContent = isOpen ? '▲ Hide Email' : '▼ View Email';
+}
+
+let _streaming = false;
+
+async function runAgent() {
+  const btn = document.getElementById('run-btn');
+  const logBox = document.getElementById('log-box');
+  btn.disabled=true; btn.textContent=' Starting...';
+  logBox.style.display='block'; logBox.textContent='';
+  const res = await fetch('/api/run',{method:'POST'});
+  const data = await res.json();
+  if (!data.ok) { logBox.textContent='❌ '+data.message; btn.disabled=false; btn.textContent='▶ Run Agent'; return; }
+  clearInterval(_pollInterval);
+  _streaming = false;
+  connectStream();
+}
+
+function connectStream() {
+  if (_streaming) return;
+  _streaming = true;
+  const btn = document.getElementById('run-btn');
+  const logBox = document.getElementById('log-box');
+  const evtSource = new EventSource('/api/stream');
+  evtSource.onmessage = (e) => {
+    btn.disabled=true; btn.textContent=' Running...';
+    if(e.data){ logBox.textContent+=e.data+'\n'; logBox.scrollTop=logBox.scrollHeight; }
+  };
+  evtSource.addEventListener('done',()=>{
+    evtSource.close();
+    _streaming = false;
+    btn.disabled=false;
+    btn.textContent='▶ Run Agent';
+    _pollInterval = setInterval(loadStatus, 10000);
+    loadStatus();
+  });
+  evtSource.onerror = () => {
+    evtSource.close();
+    _streaming = false;
+    setTimeout(async () => {
+      const res = await fetch('/api/status');
+      const data = await res.json();
+      if (data.ok && data.running) {
+        logBox.textContent += '\n Reconnecting...\n';
+        connectStream();
+      } else {
+        btn.disabled=false;
+        btn.textContent='▶ Run Agent';
+        _pollInterval = setInterval(loadStatus, 10000);
+        loadStatus();
+      }
+    }, 3000);
+  };
+}
+async function logout() { await fetch('/api/auth/logout',{method:'POST'}); window.location.href='/'; }
+loadProfile();
+loadStatus();
+let _pollInterval = setInterval(loadStatus, 10000);
+</script>
+</body>
+</html>

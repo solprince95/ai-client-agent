@@ -30,6 +30,7 @@ from flask import Flask, render_template, request, jsonify, Response, session, r
 from supabase import create_client, Client
 
 import agent_core
+import whatsapp_agent
 from paths import get_resource_dir
 
 # ══════════════════════════════════════════════════════
@@ -232,6 +233,8 @@ def api_get_profile():
         profile["is_paid"] = bool(profile.get("is_paid", False))
         profile["has_gmail_app_password"] = bool(profile.get("gmail_app_password"))
         profile.pop("gmail_app_password", None)  # never send this back to the browser
+        profile["has_whatsapp"] = bool(profile.get("whatsapp_access_token") and profile.get("whatsapp_phone_number_id"))
+        profile.pop("whatsapp_access_token", None)  # never send this back to the browser
         return jsonify({"ok": True, "profile": profile})
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)})
@@ -258,6 +261,31 @@ def api_save_profile():
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)})
+
+
+@app.route("/api/whatsapp/connect", methods=["POST"])
+@login_required
+def api_whatsapp_connect():
+    """
+    Kicks off WhatsApp connection for this user.
+
+    ⚠️ PLACEHOLDER: real Meta Embedded Signup isn't wired up yet — that
+    requires registering this app as a Meta Tech Provider, completing
+    App Review, and hosting the Facebook JS SDK popup on the frontend.
+    Once META_APP_ID / META_CONFIG_ID env vars are set, replace this
+    with the real embedded-signup launch (return a signup URL/config
+    for the frontend's FB.login() call) and a matching callback route
+    to store the returned WABA ID / phone number ID / access token.
+    """
+    meta_app_id = os.environ.get("META_APP_ID", "")
+    if not meta_app_id:
+        return jsonify({
+            "ok": False,
+            "message": "WhatsApp connection isn't set up yet on our end — check back soon!"
+        })
+    # Real flow would return signup config here, e.g.:
+    # return jsonify({"ok": True, "app_id": meta_app_id, "config_id": os.environ.get("META_CONFIG_ID", "")})
+    return jsonify({"ok": False, "message": "WhatsApp connection is being finalized."})
 
 
 # ══════════════════════════════════════════════════════
@@ -311,6 +339,13 @@ def _build_config(profile):
         "DELAY_BETWEEN_EMAILS": 3,
         "ATTACHMENT_PATH": "",
         "ATTACHMENT_NAME": "",
+        # WhatsApp Cloud API — blank until the user connects (Embedded
+        # Signup flow not built yet). See whatsapp_agent.py.
+        "WHATSAPP_ACCESS_TOKEN": profile.get("whatsapp_access_token", "") or "",
+        "WHATSAPP_PHONE_NUMBER_ID": profile.get("whatsapp_phone_number_id", "") or "",
+        "WHATSAPP_BUSINESS_ACCOUNT_ID": profile.get("whatsapp_business_account_id", "") or "",
+        "WHATSAPP_TEMPLATE_NAME": profile.get("whatsapp_template_name", "") or "business_outreach_intro",
+        "WHATSAPP_TEMPLATE_LANG": profile.get("whatsapp_template_lang", "") or "en_US",
     }
 
 
@@ -404,6 +439,69 @@ def api_send_selected():
             state["log_queue"].put(msg)
         try:
             result = agent_core.send_to_selected_leads(lead_ids, cfg, log=log, user_id=uid)
+            state["last_result"] = result
+        except Exception as e:
+            log(f"❌ Unexpected error: {e}")
+        finally:
+            log("__DONE__")
+            state["running"] = False
+
+    state["running"] = True
+    state["log_queue"] = queue.Queue()
+    state["log_buffer"] = []
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/send-whatsapp-selected", methods=["POST"])
+@login_required
+def api_send_whatsapp_selected():
+    """
+    Sends WhatsApp messages only to the lead IDs the user checked in the
+    Leads tab (uses each lead's stored phone number). Mirrors
+    /api/send-selected but for the WhatsApp channel.
+
+    Body: { "lead_ids": [...], "use_template": true|false }
+    use_template defaults to true — WhatsApp requires an approved
+    template for the first message to a new contact (cold outreach).
+    Set to false only for a reply within an existing 24h conversation.
+    """
+    uid = session["user_id"]
+    state = get_user_state(uid)
+
+    if state["running"]:
+        return jsonify({"ok": False, "message": "Agent is already running."})
+
+    profile = _get_profile(uid)
+    allowed, msg = _check_trial_or_paid(profile)
+    if not allowed:
+        return jsonify({"ok": False, "message": msg})
+
+    data = request.get_json(silent=True) or {}
+    lead_ids = data.get("lead_ids") or []
+    use_template = data.get("use_template", True)
+    if not isinstance(lead_ids, list):
+        return jsonify({"ok": False, "message": "lead_ids must be a list."})
+
+    cfg = _build_config(profile)
+
+    if not whatsapp_agent.whatsapp_configured(cfg):
+        return jsonify({
+            "ok": False,
+            "message": "WhatsApp isn't connected yet. Connect a WhatsApp Business "
+                       "number in Setup first."
+        })
+
+    def _run():
+        def log(message):
+            msg = str(message)
+            state["log_buffer"].append(msg)
+            state["log_queue"].put(msg)
+        try:
+            result = whatsapp_agent.send_whatsapp_to_selected_leads(
+                lead_ids, cfg, log=log, user_id=uid, use_template=use_template
+            )
             state["last_result"] = result
         except Exception as e:
             log(f"❌ Unexpected error: {e}")

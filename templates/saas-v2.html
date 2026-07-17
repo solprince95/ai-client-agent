@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Client Agent Automated Outreach for Indian Professionals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-2RWLQ2LHCL"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-2RWLQ2LHCL');</script>
+<style>
+/* ─── Tokens ──────────────────────────────────────────── */
+:root {
+  --bg:       #07070f;
+  --s1:       #0d0d1a;
+  --s2:       #131325;
+  --s3:       #1a1a32;
+  --blue:     #1d6aff;
+  --blue2:    #5591ff;
+  --blue3:    #0047cc;
+  --glow:     rgba(29,106,255,.32);
+  --glow2:    rgba(29,106,255,.12);
+  --t1:       #eceeff;
+  --t2:       #7880aa;
+  --t3:       #3a3f60;
+  --green:    #00e599;
+  --amber:    #f7a240;
+  --bdr:      rgba(255,255,255,.055);
+  --bdr-b:    rgba(29,106,255,.18);
+  --ease:     cubic-bezier(.16,1,.3,1);
+  --display:  'Syne', system-ui, sans-serif;
+  --body:     'Inter', system-ui, sans-serif;
+  --r:        10px;
+  --r2:       16px;
+  --r3:       24px;
+}
+
+/* ─── Reset ───────────────────────────────────────────── */
+*,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  font-family:var(--body);
+  background:var(--bg);
+  color:var(--t1);
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+::selection { background:var(--blue); color:#fff; }
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--s3); border-radius:2px; }
+
+/* subtle dot grid */
+body::before {
+  content:'';
+  position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image: radial-gradient(circle, rgba(255,255,255,.028) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* ─── Nav ─────────────────────────────────────────────── */
+nav {
+  position:sticky; top:0; z-index:300;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 clamp(1.2rem,4vw,3rem); height:60px;
+  background:rgba(7,7,15,.78);
+  backdrop-filter:blur(22px) saturate(1.4);
+  -webkit-backdrop-filter:blur(22px) saturate(1.4);
+  border-bottom:1px solid var(--bdr);
+  transition:background .3s;
+}
+.logo { display:flex; align-items:center; gap:10px; text-decoration:none; }
+.logo-mark {
+  width:32px; height:32px; border-radius:9px;
+  background:linear-gradient(135deg, var(--blue) 0%, var(--blue2) 100%);
+  display:flex; align-items:center; justify-content:center;
+  font-size:15px; box-shadow:0 0 20px var(--glow);
+  flex-shrink:0;
+}
+.logo-name {
+  font-family:var(--display);
+  font-size:.95rem; font-weight:700;
+  color:var(--t1); letter-spacing:-.01em;
+}
+.logo-name em { color:var(--blue2); font-style:normal; }
+.nav-end { display:flex; align-items:center; gap:8px; }
+.n-ghost {
+  padding:7px 16px; border-radius:var(--r);
+  font-size:.8rem; font-weight:600; font-family:var(--body);
+  background:transparent; border:1px solid var(--bdr-b);
+  color:var(--t2); cursor:pointer; transition:all .18s;
+}
+.n-ghost:hover { color:var(--t1); border-color:var(--blue); }
+.n-cta {
+  padding:8px 20px; border-radius:var(--r);
+  font-size:.8rem; font-weight:700; font-family:var(--body);
+  background:var(--blue); border:none; color:#fff; cursor:pointer;
+  box-shadow:0 0 18px var(--glow); transition:all .18s var(--ease);
+}
+.n-cta:hover { background:var(--blue2); box-shadow:0 0 30px var(--glow); transform:translateY(-1px); }
+
+/* ─── Hero ────────────────────────────────────────────── */
+.hero {
+  position:relative; overflow:hidden;
+  padding:80px clamp(1.2rem,4vw,3rem) 64px;
+}
+
+/* Big diagonal blue accent */
+.hero-bg {
+  position:absolute; inset:0; pointer-events:none;
+  background:
+    radial-gradient(ellipse 70% 60% at 20% -10%, rgba(29,106,255,.16) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 85% 80%, rgba(0,229,153,.06) 0%, transparent 60%);
+}
+
+.hero-inner {
+  position:relative; z-index:1;
+  max-width:1100px; margin:0 auto;
+  display:grid; grid-template-columns:1fr 1fr;
+  gap:48px; align-items:center;
+}
+
+/* Left column */
+.hero-left {}
+.hero-pill {
+  display:inline-flex; align-items:center; gap:7px;
+  background:rgba(29,106,255,.1); border:1px solid rgba(29,106,255,.24);
+  color:var(--blue2); padding:5px 13px 5px 9px; border-radius:100px;
+  font-size:.7rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+  margin-bottom:1.8rem;
+  animation:up .5s var(--ease) both;
+}
+.pill-dot {
+  width:6px; height:6px; border-radius:50%;
+  background:var(--green); box-shadow:0 0 8px var(--green);
+  animation:blink 2s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.35;} }
+
+.hero-h1 {
+  font-family:var(--display);
+  font-size:clamp(2.4rem,4.5vw,3.8rem);
+  font-weight:800; line-height:1.05; letter-spacing:-.03em;
+  color:var(--t1); margin-bottom:1.2rem;
+  animation:up .55s .06s var(--ease) both;
+}
+.hero-h1 .hl {
+  display:inline-block;
+  background:linear-gradient(110deg, var(--blue2) 0%, var(--blue) 50%, #00bbff 100%);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+}
+
+.hero-sub {
+  font-size:1rem; color:var(--t2); line-height:1.75; max-width:400px;
+  margin-bottom:2rem;
+  animation:up .55s .12s var(--ease) both;
+}
+
+.hero-ctas {
+  display:flex; gap:10px; flex-wrap:wrap;
+  margin-bottom:2.5rem;
+  animation:up .55s .18s var(--ease) both;
+}
+.btn-p {
+  display:inline-flex; align-items:center; gap:8px;
+  padding:13px 24px; border-radius:var(--r);
+  background:var(--blue); color:#fff;
+  font-size:.88rem; font-weight:700; font-family:var(--body);
+  border:none; cursor:pointer;
+  box-shadow:0 0 24px var(--glow), 0 2px 8px rgba(0,0,0,.4);
+  transition:all .18s var(--ease); letter-spacing:-.01em;
+}
+.btn-p:hover { background:var(--blue2); box-shadow:0 0 40px var(--glow); transform:translateY(-2px); }
+.btn-p svg { transition:transform .18s; }
+.btn-p:hover svg { transform:translateX(3px); }
+.btn-s {
+  display:inline-flex; align-items:center; gap:8px;
+  padding:13px 20px; border-radius:var(--r);
+  background:var(--s1); color:var(--t2);
+  font-size:.88rem; font-weight:600; font-family:var(--body);
+  border:1px solid var(--bdr-b); cursor:pointer;
+  transition:all .18s var(--ease);
+}
+.btn-s:hover { color:var(--t1); border-color:var(--blue); background:var(--s2); transform:translateY(-2px); }
+
+.hero-proof {
+  display:flex; align-items:center; gap:20px;
+  animation:up .55s .24s var(--ease) both;
+}
+.proof-facepile {
+  display:flex;
+}
+.proof-face {
+  width:28px; height:28px; border-radius:50%;
+  background:var(--s3); border:2px solid var(--bg);
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; margin-left:-8px;
+}
+.proof-face:first-child { margin-left:0; }
+.proof-text { font-size:.78rem; color:var(--t2); line-height:1.4; }
+.proof-text strong { color:var(--t1); font-weight:600; }
+
+/* Right column stat card */
+.hero-right {
+  animation:up .6s .28s var(--ease) both;
+}
+.stat-card {
+  background:var(--s1);
+  border:1px solid rgba(255,255,255,.07);
+  border-radius:var(--r3);
+  overflow:hidden;
+  box-shadow:0 32px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(29,106,255,.06);
+}
+.stat-topbar {
+  display:flex; align-items:center; gap:8px;
+  padding:13px 18px;
+  background:var(--s2); border-bottom:1px solid var(--bdr);
+}
+.stat-dots { display:flex; gap:5px; }
+.sd { width:10px; height:10px; border-radius:50%; }
+.sd-r{background:#ff5f57;} .sd-y{background:#febc2e;} .sd-g{background:#28c840;}
+.stat-title {
+  font-size:.65rem; font-weight:700; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--t3); margin-left:8px;
+}
+.stat-live {
+  margin-left:auto; display:flex; align-items:center; gap:5px;
+  font-size:.62rem; font-weight:700; color:var(--green);
+  letter-spacing:.05em; text-transform:uppercase;
+}
+.live-dot { width:5px; height:5px; border-radius:50%; background:var(--green); animation:blink 1.5s ease-in-out infinite; }
+
+.stat-body { padding:20px 18px; }
+
+/* The signature big number */
+.big-counter {
+  text-align:center; padding:20px 0 16px;
+  border-bottom:1px solid var(--bdr); margin-bottom:16px;
+}
+.big-num {
+  font-family:var(--display);
+  font-size:clamp(3rem,7vw,4.5rem);
+  font-weight:800; letter-spacing:-.05em;
+  color:var(--t1); line-height:1;
+}
+.big-num .acc { color:var(--blue2); }
+.big-label { font-size:.7rem; color:var(--t2); margin-top:6px; letter-spacing:.04em; text-transform:uppercase; }
+
+
+/* Email rows in the card */
+.email-rows { display:flex; flex-direction:column; gap:6px; }
+.er {
+  display:grid; grid-template-columns:1fr auto;
+  align-items:center; gap:10px;
+  background:var(--s2); border:1px solid var(--bdr);
+  border-radius:var(--r); padding:10px 13px;
+  transition:border-color .2s;
+}
+.er:hover { border-color:var(--bdr-b); }
+.er-left {}
+.er-name { font-size:.8rem; font-weight:600; color:var(--t1); }
+.er-email { font-size:.68rem; color:var(--t2); margin-top:2px; font-family:monospace; }
+.er-tag {
+  font-size:.6rem; font-weight:700; padding:2px 9px;
+  border-radius:100px; white-space:nowrap;
+}
+.t-sent  { background:rgba(29,106,255,.15); color:var(--blue2); }
+.t-found { background:rgba(0,229,153,.1); color:var(--green); }
+.t-q     { background:rgba(255,255,255,.06); color:var(--t3); }
+.t-reply { background:rgba(247,162,64,.12); color:var(--amber); }
+
+/* cursor blink */
+.cur { display:inline-block; width:2px; height:.75em; background:var(--blue2); margin-left:1px; vertical-align:middle; animation:cblink .75s step-end infinite; }
+@keyframes cblink { 0%,100%{opacity:1;} 50%{opacity:0;} }
+
+/* ─── Video section ───────────────────────────────────── */
+.video-section {
+  padding: 56px clamp(1.2rem,4vw,3rem) 0;
+  position: relative; z-index: 1;
+}
+.video-label {
+  text-align: center;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--blue2);
+  margin-bottom: 14px;
+}
+.video-heading {
+  text-align: center;
+  font-family: var(--display);
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -.03em;
+  color: var(--t1);
+  margin-bottom: 6px;
+}
+.video-sub {
+  text-align: center;
+  font-size: .88rem;
+  color: var(--t2);
+  margin-bottom: 28px;
+}
+.video-wrap {
+  max-width: 860px;
+  margin: 0 auto;
+  border-radius: var(--r3);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 32px 80px rgba(0,0,0,.7), 0 0 0 1px rgba(29,106,255,.08);
+  background: #000;
+  position: relative;
+}
+.video-wrap video {
+  width: 100%;
+  display: block;
+  border-radius: var(--r3);
+}
+/* Custom play overlay — shows when paused and not yet started */
+.video-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(7,7,15,.55);
+  border-radius: var(--r3);
+  cursor: pointer;
+  transition: opacity .25s;
+}
+.video-overlay.hidden { opacity: 0; pointer-events: none; }
+.video-play-btn {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: var(--blue);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 40px var(--glow), 0 8px 24px rgba(0,0,0,.5);
+  transition: transform .2s var(--ease), box-shadow .2s;
+}
+.video-play-btn:hover { transform: scale(1.08); box-shadow: 0 0 60px var(--glow); }
+.video-play-btn svg { margin-left: 4px; }
+.video-duration {
+  position: absolute;
+  bottom: 14px; right: 18px;
+  font-size: .72rem; font-weight: 700;
+  color: rgba(255,255,255,.7);
+  background: rgba(0,0,0,.5);
+  padding: 3px 8px; border-radius: 6px;
+  pointer-events: none;
+}
+.video-unmute {
+  position: absolute;
+  top: 14px; right: 14px;
+  background: rgba(0,0,0,.65);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.15);
+  color: var(--t1);
+  font-size: .72rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: all .2s;
+  letter-spacing: .02em;
+}
+.video-unmute:hover { background: var(--blue); border-color: var(--blue); }
+.video-unmute.hidden { display: none; }
+
+/* ─── Trust strip ─────────────────────────────────────── */
+.trust {
+  position:relative; z-index:1;
+  border-top:1px solid var(--bdr); border-bottom:1px solid var(--bdr);
+  padding:18px clamp(1.2rem,4vw,3rem);
+}
+.trust-in {
+  max-width:900px; margin:0 auto;
+  display:flex; align-items:center; justify-content:center;
+  gap:clamp(18px,3vw,42px); flex-wrap:wrap;
+}
+.ti {
+  display:flex; align-items:center; gap:7px;
+  font-size:.74rem; font-weight:600; color:var(--t3);
+}
+.ti svg { opacity:.5; flex-shrink:0; }
+
+/* ─── Section base ────────────────────────────────────── */
+.section { padding:88px clamp(1.2rem,4vw,3rem); position:relative; z-index:1; }
+.sec-inner { max-width:1100px; margin:0 auto; }
+.eyebrow {
+  display:inline-flex; align-items:center; gap:8px;
+  font-size:.65rem; font-weight:700; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--blue2); margin-bottom:14px;
+}
+.eyebrow::before { content:''; width:18px; height:2px; background:var(--blue); border-radius:2px; }
+.sec-h {
+  font-family:var(--display);
+  font-size:clamp(1.8rem,4vw,2.8rem);
+  font-weight:800; letter-spacing:-.04em; line-height:1.07;
+  color:var(--t1); margin-bottom:12px;
+}
+.sec-sub { font-size:.92rem; color:var(--t2); max-width:460px; line-height:1.75; }
+
+/* ─── Bento feature grid ──────────────────────────────── */
+.bento {
+  display:grid;
+  grid-template-columns:repeat(12, 1fr);
+  grid-template-rows:auto;
+  gap:12px;
+  margin-top:52px;
+}
+.bcard {
+  background:var(--s1);
+  border:1px solid var(--bdr);
+  border-radius:var(--r2);
+  padding:28px 26px;
+  transition:border-color .25s, background .25s;
+  position:relative; overflow:hidden;
+}
+.bcard:hover { border-color:var(--bdr-b); background:var(--s2); }
+.bcard::before {
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(135deg, rgba(29,106,255,.04) 0%, transparent 60%);
+  opacity:0; transition:opacity .3s;
+}
+.bcard:hover::before { opacity:1; }
+
+/* Grid placement */
+.bc1 { grid-column:span 5; }
+.bc2 { grid-column:span 7; }
+.bc3 { grid-column:span 4; }
+.bc4 { grid-column:span 4; }
+.bc5 { grid-column:span 4; }
+.bc6 { grid-column:span 12; }
+
+.bcard-eyebrow {
+  font-size:.6rem; font-weight:800; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--blue2); margin-bottom:10px;
+}
+.bcard h3 {
+  font-family:var(--display);
+  font-size:1.05rem; font-weight:700; letter-spacing:-.02em;
+  color:var(--t1); margin-bottom:8px;
+}
+.bcard p { font-size:.82rem; color:var(--t2); line-height:1.65; }
+
+/* Mini pipeline in bc2 */
+.mini-pipe {
+  display:flex; align-items:center; gap:6px;
+  margin-top:16px; flex-wrap:wrap;
+}
+.pipe-step {
+  background:var(--s2); border:1px solid var(--bdr);
+  border-radius:8px; padding:8px 12px;
+  font-size:.72rem; font-weight:600; color:var(--t2);
+  display:flex; align-items:center; gap:6px;
+}
+.pipe-step.active { border-color:var(--bdr-b); color:var(--blue2); }
+.pipe-arrow { color:var(--t3); font-size:.7rem; }
+
+/* Score bar in bc1 */
+.score-bars { display:flex; flex-direction:column; gap:8px; margin-top:16px; }
+.sbar-row { display:flex; align-items:center; gap:10px; font-size:.72rem; color:var(--t2); }
+.sbar-label { width:80px; flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:.68rem; }
+.sbar-track { flex:1; height:5px; background:var(--s3); border-radius:3px; overflow:hidden; }
+.sbar-fill { height:100%; border-radius:3px; background:linear-gradient(90deg, var(--blue3), var(--blue2)); }
+.sbar-val { font-weight:700; color:var(--t1); font-size:.7rem; width:28px; text-align:right; }
+
+/* CRM preview in bc6 */
+.crm-row {
+  display:grid; grid-template-columns:2fr 2.5fr 1fr 1fr 80px;
+  align-items:center; gap:12px;
+  padding:11px 14px;
+  background:var(--s2); border:1px solid var(--bdr);
+  border-radius:var(--r); margin-top:8px;
+  font-size:.78rem;
+  transition:border-color .2s;
+}
+.crm-row:first-of-type { margin-top:14px; }
+.crm-row:hover { border-color:var(--bdr-b); }
+.crm-name { font-weight:700; color:var(--t1); }
+.crm-email { color:var(--t2); font-family:monospace; font-size:.7rem; }
+.crm-city { color:var(--t3); font-size:.72rem; }
+.crm-score { font-weight:800; font-size:.82rem; }
+.score-hi { color:var(--green); }
+.score-md { color:var(--amber); }
+.crm-status {
+  font-size:.62rem; font-weight:700; padding:3px 9px;
+  border-radius:100px; text-align:center;
+}
+.s-disc { background:rgba(255,255,255,.07); color:var(--t3); }
+.s-cont { background:rgba(29,106,255,.15); color:var(--blue2); }
+.s-rep  { background:rgba(0,229,153,.12); color:var(--green); }
+
+/* ─── How it works ────────────────────────────────────── */
+.steps-row {
+  display:grid; grid-template-columns:repeat(4,1fr);
+  gap:1px; background:var(--bdr);
+  border:1px solid var(--bdr); border-radius:var(--r2);
+  overflow:hidden; margin-top:48px;
+}
+.step {
+  background:var(--s1); padding:28px 24px;
+  position:relative; transition:background .2s;
+}
+.step:hover { background:var(--s2); }
+.step-n {
+  font-family:var(--display);
+  font-size:.6rem; font-weight:800;
+  letter-spacing:.12em; color:var(--blue); margin-bottom:16px;
+}
+.step h3 {
+  font-family:var(--display);
+  font-size:.92rem; font-weight:700; letter-spacing:-.02em;
+  color:var(--t1); margin-bottom:7px;
+}
+.step p { font-size:.78rem; color:var(--t2); line-height:1.65; }
+.step:not(:last-child)::after {
+  content:''; position:absolute; top:28px; right:-1px;
+  width:1px; height:28px;
+  background:linear-gradient(to bottom, transparent, var(--blue), transparent);
+}
+
+/* ─── Stats row ───────────────────────────────────────── */
+.stats-band {
+  display:grid; grid-template-columns:repeat(4,1fr);
+  gap:1px; background:var(--bdr);
+  border:1px solid var(--bdr); border-radius:var(--r2);
+  overflow:hidden; margin-top:48px;
+}
+.stat-tile {
+  background:var(--s1); padding:28px 24px;
+  transition:background .2s;
+}
+.stat-tile:hover { background:var(--s2); }
+.st-val {
+  font-family:var(--display);
+  font-size:2.6rem; font-weight:800;
+  letter-spacing:-.05em; color:var(--t1); line-height:1; margin-bottom:6px;
+}
+.st-val em { color:var(--blue2); font-style:normal; }
+.st-label { font-size:.72rem; color:var(--t2); font-weight:500; }
+
+/* ─── FAQ ─────────────────────────────────────────────── */
+.faq-list { margin-top:48px; display:flex; flex-direction:column; gap:2px; }
+.faq-item {
+  background:var(--s1); border:1px solid var(--bdr);
+  border-radius:var(--r2); overflow:hidden;
+  transition:border-color .2s;
+}
+.faq-item.open { border-color:var(--bdr-b); }
+.faq-q {
+  width:100%; display:flex; align-items:center; justify-content:space-between;
+  padding:20px 24px; cursor:pointer;
+  font-family:var(--display); font-size:.92rem; font-weight:700;
+  color:var(--t1); letter-spacing:-.02em;
+  background:none; border:none; text-align:left;
+  transition:color .2s;
+}
+.faq-q:hover { color:var(--blue2); }
+.faq-chevron {
+  width:20px; height:20px; border-radius:6px;
+  background:var(--s2); border:1px solid var(--bdr);
+  display:flex; align-items:center; justify-content:center;
+  font-size:.7rem; color:var(--t2); flex-shrink:0; margin-left:16px;
+  transition:all .25s var(--ease);
+}
+.faq-item.open .faq-chevron { background:var(--blue); border-color:var(--blue); color:#fff; transform:rotate(180deg); }
+.faq-a {
+  max-height:0; overflow:hidden;
+  transition:max-height .35s var(--ease), padding .35s var(--ease);
+  font-size:.85rem; color:var(--t2); line-height:1.75;
+}
+.faq-a-inner { padding:0 24px 20px; }
+.faq-item.open .faq-a { max-height:300px; }
+
+/* ─── CTA band ────────────────────────────────────────── */
+.cta-band {
+  margin:0 clamp(1.2rem,4vw,3rem) 88px;
+  border-radius:var(--r3);
+  background:linear-gradient(135deg, #091735 0%, #060f2a 50%, #04091e 100%);
+  border:1px solid rgba(29,106,255,.2);
+  padding:72px clamp(24px,6vw,80px);
+  text-align:center; position:relative; overflow:hidden; z-index:1;
+}
+.cta-band::before {
+  content:''; position:absolute; top:-100px; left:50%; transform:translateX(-50%);
+  width:700px; height:600px; pointer-events:none;
+  background:radial-gradient(ellipse, rgba(29,106,255,.18) 0%, transparent 65%);
+}
+.cta-band::after {
+  content:''; position:absolute; top:0; left:15%; right:15%; height:1px;
+  background:linear-gradient(90deg, transparent, var(--blue), transparent);
+}
+.cta-band h2 {
+  font-family:var(--display);
+  font-size:clamp(1.7rem,4vw,2.6rem);
+  font-weight:800; letter-spacing:-.04em; color:var(--t1);
+  margin-bottom:10px; position:relative;
+}
+.cta-band p { font-size:.92rem; color:var(--t2); margin-bottom:30px; position:relative; }
+.cta-note {
+  font-size:.72rem; color:var(--t3); margin-top:14px;
+  display:flex; align-items:center; justify-content:center; gap:6px; position:relative;
+}
+
+/* ─── Footer ──────────────────────────────────────────── */
+footer {
+  border-top:1px solid var(--bdr);
+  padding:28px clamp(1.2rem,4vw,3rem);
+  position:relative; z-index:1;
+}
+.foot-in {
+  max-width:1100px; margin:0 auto;
+  display:flex; align-items:center; justify-content:space-between;
+  flex-wrap:wrap; gap:12px;
+}
+.foot-copy { font-size:.75rem; color:var(--t3); }
+.foot-copy strong { color:var(--t2); }
+.foot-links { display:flex; gap:22px; }
+.foot-links a { font-size:.75rem; color:var(--t3); text-decoration:none; transition:color .18s; }
+.foot-links a:hover { color:var(--t2); }
+
+/* ─── Auth modal ──────────────────────────────────────── */
+#auth-overlay {
+  position:fixed; inset:0;
+  background:rgba(4,4,12,.88);
+  backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  display:none; align-items:center; justify-content:center;
+  z-index:9999; padding:1rem;
+}
+#auth-overlay.show { display:flex; }
+#auth-box {
+  background:var(--s1); border:1px solid rgba(255,255,255,.09);
+  border-radius:var(--r3); padding:38px 32px;
+  width:100%; max-width:400px; position:relative;
+  box-shadow:0 40px 80px rgba(0,0,0,.8);
+  animation:pop .28s var(--ease) both;
+}
+@keyframes pop { from{opacity:0;transform:scale(.95) translateY(10px);} to{opacity:1;transform:none;} }
+.auth-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:26px; }
+#auth-title { font-family:var(--display); font-size:1.2rem; font-weight:800; letter-spacing:-.03em; }
+.close-auth {
+  width:28px; height:28px; border-radius:7px;
+  background:var(--s2); border:1px solid var(--bdr);
+  color:var(--t2); font-size:.8rem; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .18s;
+}
+.close-auth:hover { background:var(--s3); color:var(--t1); }
+.auth-lbl { display:block; font-size:.72rem; font-weight:700; color:var(--t2); margin-bottom:5px; }
+.auth-inp {
+  width:100%; padding:10px 13px;
+  background:var(--bg); border:1px solid rgba(255,255,255,.07);
+  border-radius:var(--r); color:var(--t1);
+  font-size:.86rem; font-family:var(--body);
+  outline:none; transition:all .18s; margin-bottom:10px;
+}
+.auth-inp:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(29,106,255,.14); }
+.auth-inp::placeholder { color:var(--t3); }
+.auth-msg { font-size:.75rem; border-radius:8px; padding:9px 13px; margin-bottom:10px; display:none; }
+.auth-msg.err { background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.2); color:#f87171; }
+.auth-msg.ok  { background:rgba(0,229,153,.1);  border:1px solid rgba(0,229,153,.2);  color:var(--green); }
+.auth-btn {
+  width:100%; padding:12px;
+  background:var(--blue); color:#fff;
+  font-size:.88rem; font-weight:700; font-family:var(--body);
+  border:none; border-radius:var(--r); cursor:pointer; margin-top:4px;
+  box-shadow:0 0 20px var(--glow); transition:all .18s var(--ease);
+}
+.auth-btn:hover { background:var(--blue2); box-shadow:0 0 34px var(--glow); transform:translateY(-1px); }
+.auth-switch { text-align:center; margin-top:14px; font-size:.78rem; color:var(--t3); }
+.auth-switch a { color:var(--blue2); cursor:pointer; font-weight:700; }
+.auth-switch a:hover { text-decoration:underline; }
+
+/* ─── Animations ──────────────────────────────────────── */
+@keyframes up { from{opacity:0;transform:translateY(18px);} to{opacity:1;transform:none;} }
+.reveal { opacity:0; transform:translateY(14px); transition:opacity .65s var(--ease), transform .65s var(--ease); }
+.reveal.on { opacity:1; transform:none; }
+.reveal-2 { transition-delay:.1s; }
+.reveal-3 { transition-delay:.2s; }
+
+/* ─── Responsive ──────────────────────────────────────── */
+@media(max-width:900px) {
+  .hero-inner { grid-template-columns:1fr; }
+  .hero-right { display:none; }
+  .bento { grid-template-columns:1fr 1fr; }
+  .bc1,.bc2,.bc3,.bc4,.bc5,.bc6 { grid-column:span 2; }
+  .bc3,.bc4,.bc5 { grid-column:span 1; }
+  .steps-row { grid-template-columns:1fr 1fr; }
+  .step:not(:last-child)::after { display:none; }
+  .stats-band { grid-template-columns:1fr 1fr; }
+  .crm-row { grid-template-columns:1fr auto; }
+  .crm-email,.crm-city { display:none; }
+}
+@media(max-width:580px) {
+  .hero-ctas { flex-direction:column; align-items:flex-start; }
+  .btn-p,.btn-s { width:100%; justify-content:center; }
+  .bento { grid-template-columns:1fr; }
+  .bc1,.bc2,.bc3,.bc4,.bc5,.bc6 { grid-column:span 1; }
+  .steps-row { grid-template-columns:1fr; }
+  .stats-band { grid-template-columns:1fr 1fr; }
+  .cta-band { margin:0 1rem 56px; padding:44px 20px; }
+}
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms!important; transition-duration:.01ms!important; } }
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+  <div id="auth-box">
+    <div class="auth-top">
+      <h2 id="auth-title">Create account</h2>
+      <button class="close-auth" onclick="closeAuth()" aria-label="Close">✕</button>
+    </div>
+    <p class="auth-msg" id="auth-msg"></p>
+    <div id="name-field">
+      <label class="auth-lbl" for="auth-name">Full name</label>
+      <input class="auth-inp" type="text" id="auth-name" placeholder="Rahul Sharma" autocomplete="name"/>
+    </div>
+    <label class="auth-lbl" for="auth-email">Email address</label>
+    <input class="auth-inp" type="email" id="auth-email" placeholder="you@gmail.com" autocomplete="email"/>
+    <label class="auth-lbl" for="auth-password">Password</label>
+    <input class="auth-inp" type="password" id="auth-password" placeholder="8+ characters" autocomplete="current-password"/>
+    <button class="auth-btn" onclick="submitAuth()">Get Started Free</button>
+    <p class="auth-switch" id="auth-switch">Already have an account? <a onclick="toggleAuth()">Sign in</a></p>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav id="nav">
+  <a class="logo" href="#">
+    <div class="logo-mark"><svg width="16" height="16" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+    <span class="logo-name">AI Client <em>Agent</em></span>
+  </a>
+  <div class="nav-end">
+    <button class="n-ghost" onclick="showAuth('login')">Sign In</button>
+    <button class="n-cta" onclick="showAuth('signup')">Start Free →</button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg" aria-hidden="true"></div>
+  <div class="hero-inner">
+
+    <!-- Left -->
+    <div class="hero-left">
+      <div class="hero-pill">
+        <span class="pill-dot"></span>
+        5-day free trial 
+      </div>
+      <h1 class="hero-h1">
+        Your AI agent<br>that finds clients<br><span class="hl">while you sleep.</span>
+      </h1>
+      <p class="hero-sub">
+        Searches Google Maps, scrapes contact details, and sends personalised pitches automatically, every day.
+      </p>
+      <div class="hero-ctas">
+        <button class="btn-p" onclick="showAuth('signup')">
+          Get Started Free
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+        <button class="btn-s" onclick="showAuth('login')">Sign In</button>
+      </div>
+      <div class="hero-proof"><div class="proof-text"><strong>Businesses and professionals</strong> finding customers on autopilot.</div></div>
+      </div>
+    </div>
+
+    <!-- Right: stat card -->
+    <div class="hero-right">
+      <div class="stat-card">
+        <div class="stat-topbar">
+          <div class="stat-dots">
+            <div class="sd sd-r"></div><div class="sd sd-y"></div><div class="sd sd-g"></div>
+          </div>
+          <span class="stat-title">Live Outreach</span>
+          <div class="stat-live"><span class="live-dot"></span>Running now</div>
+        </div>
+        <div class="stat-body">
+          <div class="big-counter">
+            <div class="big-num" id="big-cnt">0<span class="acc">+</span></div>
+            <div class="big-label">Emails sent today</div>
+            
+          </div>
+          <div class="email-rows">
+            <div class="er">
+              <div class="er-left">
+                <div class="er-name">WebCultivation Technology</div>
+                <div class="er-email">info@webcultivation.com</div>
+              </div>
+              <div class="er-tag t-sent">✓ Sent</div>
+            </div>
+            <div class="er">
+              <div class="er-left">
+                <div class="er-name">Delta Infosoft Pvt. Ltd.</div>
+                <div class="er-email">info@deltainfosoft.com</div>
+              </div>
+              <div class="er-tag t-sent">✓ Sent</div>
+            </div>
+            <div class="er">
+              <div class="er-left">
+                <div class="er-name">Harsh Advertising Agency</div>
+                <div class="er-email">harsh.advt26@gmail.com</div>
+              </div>
+              <div class="er-tag t-reply">Replied!</div>
+            </div>
+            <div class="er">
+              <div class="er-left">
+                <div class="er-name" id="tw-cell">Six Sense Technology<span class="cur"></span></div>
+                <div class="er-email">sixsensetechnology1019@gmail.com</div>
+              </div>
+              <div class="er-tag t-q">Queued</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- VIDEO -->
+<div class="video-section reveal">
+  <div class="video-label">See it in action</div>
+  <h2 class="video-heading">Watch how it works</h2>
+  <p class="video-sub">From setup to your first reply in under 5 minutes.</p>
+  <div class="video-wrap">
+    <video
+      id="tutorial-video"
+      preload="auto"
+      playsinline
+      autoplay
+      controls
+      src="/static/tutorial.mp4"
+    ></video>
+    <div class="video-overlay" id="video-overlay" onclick="playVideo()">
+      <div class="video-play-btn">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TRUST -->
+<div class="trust">
+  <div class="trust-in">
+    <div class="ti">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Secure Gmail OAuth
+    </div>
+    <div class="ti">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Runs 24/7 on Autopilot
+    </div>
+    <div class="ti">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      Zero Technical Setup
+    </div>
+    <div class="ti">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+      UPI Accepted
+    </div>
+    <div class="ti">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      Made in India
+    </div>
+  </div>
+</div>
+
+<!-- FEATURES BENTO -->
+<section class="section reveal">
+  <div class="sec-inner">
+    <div class="eyebrow">What it does</div>
+    <h2 class="sec-h">Everything you need.<br>Nothing you don't.</h2>
+    <p class="sec-sub">One platform. Replaces hours of manual prospecting with automation.</p>
+
+    <div class="bento">
+
+      <!-- Match score -->
+      <div class="bcard bc1">
+        <div class="bcard-eyebrow">Smart Targeting</div>
+        <h3>Lead match scoring</h3>
+        <p>Scored by website quality, email found, and how well they match your service.</p>
+        <div class="score-bars">
+          <div class="sbar-row">
+            <span class="sbar-label">WebCultivation</span>
+            <div class="sbar-track"><div class="sbar-fill" style="width:90%"></div></div>
+            <span class="sbar-val">90</span>
+          </div>
+          <div class="sbar-row">
+            <span class="sbar-label">Delta Infosoft</span>
+            <div class="sbar-track"><div class="sbar-fill" style="width:80%"></div></div>
+            <span class="sbar-val">80</span>
+          </div>
+          <div class="sbar-row">
+            <span class="sbar-label">Six Sense Tech</span>
+            <div class="sbar-track"><div class="sbar-fill" style="width:75%"></div></div>
+            <span class="sbar-val">75</span>
+          </div>
+          <div class="sbar-row">
+            <span class="sbar-label">Setu Skin Clinic</span>
+            <div class="sbar-track"><div class="sbar-fill" style="width:60%"></div></div>
+            <span class="sbar-val">60</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pipeline -->
+      <div class="bcard bc2">
+        <div class="bcard-eyebrow">Fully Automated Pipeline</div>
+        <h3>From Maps to inbox in minutes</h3>
+        <p>You review and approve. The agent does everything else.</p>
+        <div class="mini-pipe">
+          <div class="pipe-step active">Google Maps</div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step active">Extract email</div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step active">Personalise</div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">CRM</div>
+        </div>
+      </div>
+
+      <!-- CRM -->
+      <div class="bcard bc3">
+        <div class="bcard-eyebrow">Built-in CRM</div>
+        <h3>Track every lead</h3>
+        <p>Discovered, contacted, replied, closed. Click any lead for full details.</p>
+      </div>
+
+      <!-- Google Meet -->
+      <div class="bcard bc4">
+        <div class="bcard-eyebrow">One-click meetings</div>
+        <h3>Google Meet from your CRM</h3>
+        <p>Start a Google Meet directly from the lead card. Email copied automatically.</p>
+      </div>
+
+      <!-- Hunter.io -->
+      <div class="bcard bc5">
+        <div class="bcard-eyebrow">People data</div>
+        <h3>Names, titles & emails</h3>
+        <p>Finds names, job titles, and verified emails via Hunter.io.</p>
+      </div>
+
+      <!-- CRM table preview -->
+      <div class="bcard bc6">
+        <div class="bcard-eyebrow">Your CRM live preview</div>
+        <h3>Your full pipeline, in one view</h3>
+        <div class="crm-row">
+          <span class="crm-name">Hotel El Lujo</span>
+          <span class="crm-email">sales@hotelellujo.com</span>
+          <span class="crm-city">Palanpur</span>
+          <span class="crm-score score-hi">90</span>
+          <span class="crm-status s-rep">Replied</span>
+        </div>
+        <div class="crm-row">
+          <span class="crm-name">WebCultivation Technology</span>
+          <span class="crm-email">info@webcultivation.com</span>
+          <span class="crm-city">Palanpur</span>
+          <span class="crm-score score-hi">80</span>
+          <span class="crm-status s-cont">Contacted</span>
+        </div>
+        <div class="crm-row">
+          <span class="crm-name">Setu Skin Clinic</span>
+          <span class="crm-email">info@palanpurhospital.in</span>
+          <span class="crm-city">Palanpur</span>
+          <span class="crm-score score-md">60</span>
+          <span class="crm-status s-disc">Discovered</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section reveal reveal-2">
+  <div class="sec-inner">
+    <div class="eyebrow">How it works</div>
+    <h2 class="sec-h">Four steps.<br>Fully automated.</h2>
+    <p class="sec-sub">Set up once in under 3 minutes. Runs automatically every day.</p>
+
+    <div class="steps-row">
+      <div class="step">
+        <div class="step-n">STEP 01</div>
+        <h3>Set Your Profile</h3>
+        <p>Your name, service, city, and Gmail. Done.</p>
+      </div>
+      <div class="step">
+        <div class="step-n">STEP 02</div>
+        <h3>Discover Businesses</h3>
+        <p>Scours Google Maps for businesses. Extracts emails, phones, and contact names.</p>
+      </div>
+      <div class="step">
+        <div class="step-n">STEP 03</div>
+        <h3>Review &amp; Send</h3>
+        <p>You pick who to email. The agent writes a personalised pitch from their own website.</p>
+      </div>
+      <div class="step">
+        <div class="step-n">STEP 04</div>
+        <h3>Close the Deal</h3>
+        <p>Replies land in your CRM. Start a meeting, close the deal.</p>
+      </div>
+    </div>
+
+    <div class="stats-band">
+      <div class="stat-tile">
+        <div class="st-val">3<em>min</em></div>
+        <div class="st-label">Setup time</div>
+      </div>
+      <div class="stat-tile">
+        <div class="st-val">∞</div>
+        <div class="st-label">No email limit per run</div>
+      </div>
+      <div class="stat-tile">
+        <div class="st-val">24<em>/7</em></div>
+        <div class="st-label">Runs automatically</div>
+      </div>
+      <div class="stat-tile">
+        <div class="st-val">0</div>
+        <div class="st-label">Manual effort after setup</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="section reveal reveal-3">
+  <div class="sec-inner">
+    <div class="eyebrow">Questions</div>
+    <h2 class="sec-h">Common questions.</h2>
+
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          Does it really send emails automatically?
+          <span class="faq-chevron">▼</span>
+        </button>
+        <div class="faq-a"><div class="faq-a-inner">Yes but with your approval. Pick the leads you want to email, click Send, and the agent writes and sends a personalised pitch from their website details.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          Will my Gmail account get banned for sending bulk emails?
+          <span class="faq-chevron">▼</span>
+        </button>
+        <div class="faq-a"><div class="faq-a-inner">No. Emails go via Brevo not Gmail directly so your Gmail reputation stays clean. Each email is personalised, not a mass blast.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          Who is this for?
+          <span class="faq-chevron">▼</span>
+        </button>
+        <div class="faq-a"><div class="faq-a-inner">Anyone who wants to find potential customers or companies and reach them automatically. If your target clients are businesses, this agent finds and contacts them for you.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          How is this different from just doing it manually?
+          <span class="faq-chevron">▼</span>
+        </button>
+        <div class="faq-a"><div class="faq-a-inner">Manual outreach takes hours per session. The agent does it in minutes, finds contacts you'd miss, and tracks everything in a CRM. You just show up for the conversations.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          What happens after the 5-day free trial?
+          <span class="faq-chevron">▼</span>
+        </button>
+        <div class="faq-a"><div class="faq-a-inner">Upgrade via UPI. All your leads and CRM data are saved. No auto-charge, no credit card needed to start.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA BAND -->
+<div class="cta-band reveal">
+  <h2>Your next customer is out there.<br>Let AI find them.</h2>
+  <p>5-day free trial. No credit card required.</p>
+  <button class="btn-p" style="margin:0 auto;" onclick="showAuth('signup')">
+    Get Started Free
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+  </button>
+  <div class="cta-note">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    Your leads and contacts stay private.
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="foot-in">
+    <p class="foot-copy">© 2026 <strong>AI Client Agent</strong> · Made with ❤️ in India</p>
+    <div class="foot-links"><a href="tel:+919913620474">+91 99136 20474</a></div>
+  </div>
+</footer>
+
+<script>
+/* ── Auth ──────────────────────────────────────────── */
+let isLogin = false;
+
+function showAuth(mode) {
+  isLogin = mode === 'login';
+  document.getElementById('auth-overlay').classList.add('show');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('auth-title').textContent = isLogin ? 'Welcome back' : 'Create account';
+  document.getElementById('name-field').style.display = isLogin ? 'none' : 'block';
+  document.querySelector('.auth-btn').textContent = isLogin ? 'Sign In' : 'Get Started Free';
+  document.getElementById('auth-switch').innerHTML = isLogin
+    ? 'No account? <a onclick="toggleAuth()">Sign up free</a>'
+    : 'Already have an account? <a onclick="toggleAuth()">Sign in</a>';
+  const m = document.getElementById('auth-msg');
+  m.style.display = 'none'; m.className = 'auth-msg';
+}
+function closeAuth() { document.getElementById('auth-overlay').classList.remove('show'); document.body.style.overflow = ''; }
+function toggleAuth() { showAuth(isLogin ? 'signup' : 'login'); }
+
+async function submitAuth() {
+  const email    = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value.trim();
+  const full_name= document.getElementById('auth-name').value.trim();
+  const msg      = document.getElementById('auth-msg');
+  const btn      = document.querySelector('.auth-btn');
+  msg.style.display = 'none';
+  if (!email || !password || (!isLogin && !full_name)) {
+    msg.textContent = isLogin ? 'Email and password required.' : 'Name, email and password required.';
+    msg.className = 'auth-msg err'; msg.style.display = 'block'; return;
+  }
+  btn.textContent = isLogin ? 'Signing in…' : 'Creating account…'; btn.disabled = true;
+  try {
+    const res  = await fetch(isLogin ? '/api/auth/login' : '/api/auth/signup', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(isLogin ? {email,password} : {email,password,full_name})
+    });
+    const data = await res.json();
+    if (data.ok && data.confirm) {
+      msg.textContent = data.message; msg.className = 'auth-msg ok'; msg.style.display = 'block';
+      document.getElementById('auth-title').textContent = 'Check your email';
+      document.getElementById('name-field').style.display = 'none';
+      document.getElementById('auth-switch').innerHTML = "Confirmed? <a onclick=\"showAuth('login')\">Sign in</a>";
+      btn.textContent = 'Sign In'; btn.disabled = false;
+    } else if (data.ok) {
+      window.location.href = data.redirect;
+    } else {
+      msg.textContent = data.message; msg.className = 'auth-msg err'; msg.style.display = 'block';
+      btn.textContent = isLogin ? 'Sign In' : 'Get Started Free'; btn.disabled = false;
+    }
+  } catch(e) {
+    msg.textContent = 'Something went wrong. Try again.';
+    msg.className = 'auth-msg err'; msg.style.display = 'block';
+    btn.textContent = isLogin ? 'Sign In' : 'Get Started Free'; btn.disabled = false;
+  }
+}
+
+document.getElementById('auth-overlay').addEventListener('click', e => { if(e.target===e.currentTarget) closeAuth(); });
+document.addEventListener('keydown', e => {
+  if(e.key==='Escape') closeAuth();
+  if(e.key==='Enter' && document.getElementById('auth-overlay').classList.contains('show')) submitAuth();
+});
+
+/* ── FAQ accordion ──────────────────────────────────── */
+function toggleFaq(btn) {
+  const item = btn.closest('.faq-item');
+  const isOpen = item.classList.contains('open');
+  document.querySelectorAll('.faq-item.open').forEach(el => el.classList.remove('open'));
+  if (!isOpen) item.classList.add('open');
+}
+
+/* ── Counter animation ──────────────────────────────── */
+function countUp(el, target, dur=1600) {
+  const start = performance.now();
+  const tick = now => {
+    const p = Math.min((now-start)/dur, 1);
+    const ease = 1-Math.pow(1-p, 3);
+    el.innerHTML = Math.floor(ease*target).toLocaleString('en-IN') + '<span class="acc">+</span>';
+    if (p < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+setTimeout(() => {
+  countUp(document.getElementById('big-cnt'), 183);
+  
+}, 500);
+
+/* ── Typewriter ──────────────────────────────────────── */
+const names = ['Six Sense Technology','Harsh Advertising','Hotel Golden','WebCultivation','Delta Infosoft','Sanjay Industries'];
+let ni = 0;
+const twEl = document.getElementById('tw-cell');
+function typeNext() {
+  const name = names[ni++ % names.length];
+  twEl.innerHTML = '<span class="cur"></span>';
+  let i = 0;
+  const t = setInterval(() => {
+    if (i < name.length) {
+      twEl.innerHTML = name.slice(0,++i) + '<span class="cur"></span>';
+    } else { clearInterval(t); setTimeout(typeNext, 2600); }
+  }, 52);
+}
+setTimeout(typeNext, 1400);
+
+/* ── Scroll reveal ───────────────────────────────────── */
+const io = new IntersectionObserver(entries => {
+  entries.forEach(el => { if(el.isIntersecting){ el.target.classList.add('on'); io.unobserve(el.target); } });
+}, {threshold:.08});
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+/* ── Video player ────────────────────────────────────── */
+const vid     = document.getElementById('tutorial-video');
+const overlay = document.getElementById('video-overlay');
+
+function playVideo() { vid.play(); overlay.classList.add('hidden'); }
+
+overlay.classList.add('hidden');
+
+vid.addEventListener('pause', () => { if (!vid.ended) overlay.classList.remove('hidden'); });
+vid.addEventListener('ended', () => { overlay.classList.remove('hidden'); });
+vid.addEventListener('play',  () => { overlay.classList.add('hidden'); });
+vid.play().catch(() => { overlay.classList.remove('hidden'); });
+
+
+const nav = document.getElementById('nav');
+window.addEventListener('scroll', () => {
+  nav.style.background = window.scrollY > 30 ? 'rgba(7,7,15,.96)' : 'rgba(7,7,15,.78)';
+}, {passive:true});
+</script>
+</body>
+</html>

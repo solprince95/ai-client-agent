@@ -809,6 +809,7 @@ body {
           </label>
           <span class="selected-count" id="selected-count">0 selected</span>
           <button class="send-btn" id="send-selected-btn" onclick="sendToSelected()" disabled>Send Emails to Selected</button>
+          <button class="send-btn" id="send-whatsapp-selected-btn" onclick="sendWhatsAppToSelected()" disabled>Send WhatsApp message to Selected</button>
         </div>
 
         <div class="lead-list" id="lead-list">
@@ -839,13 +840,23 @@ body {
               <label class="field-label">Your Service</label>
               <input type="text" class="field-inp" id="your_service" placeholder="e.g. Website Design, Photography"/>
             </div>
-            <div class="form-field">
-              <label class="field-label">Target City</label>
-              <input type="text" class="field-inp" id="target_city" placeholder="e.g. Surat, Ahmedabad"/>
-            </div>
             <div class="form-field full">
               <label class="field-label">About You / Your Pitch</label>
               <textarea class="field-ta" id="your_about" placeholder="Brief description of your service and what you offer..."></textarea>
+            </div>
+            <div class="form-field full">
+              <label class="field-label">WhatsApp</label>
+              <div class="whatsapp-connect-row">
+                <button class="save-btn whatsapp-connect-btn" id="connect-whatsapp-btn" onclick="connectWhatsApp()" type="button">Connect WhatsApp</button>
+                <span id="whatsapp-status" style="font-weight:700;margin-left:10px;"></span>
+              </div>
+              <div class="field-hint">
+                Opens Meta's secure sign-in to link your WhatsApp Business number — no manual setup needed.
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="field-label">Target City</label>
+              <input type="text" class="field-inp" id="target_city" placeholder="e.g. Surat, Ahmedabad"/>
             </div>
           </div>
         </div>
@@ -859,8 +870,8 @@ body {
               <input type="email" class="field-inp" id="gmail" placeholder="your@gmail.com"/>
             </div>
             <div class="form-field full">
-              <label class="field-label">Gmail App Password</label>
-              <input type="text" class="field-inp" id="gmail_app_password" placeholder="Leave blank to keep current password"/>
+              <label class="field-label">Secure Reply Access</label>
+              <input type="text" class="field-inp" id="gmail_app_password" placeholder=""/>
               <div class="field-hint">
                 Needed to check your inbox for replies automatically. Generate one at
                 <a href="https://myaccount.google.com/apppasswords" target="_blank">myaccount.google.com/apppasswords</a>
@@ -872,7 +883,7 @@ body {
         </div>
 
         <div class="save-row">
-          <button class="save-btn" onclick="saveProfile()">Save Profile</button>
+          <button class="save-btn" id="save-profile-btn" onclick="saveProfile()">Save Profile</button>
           <span class="save-feedback" id="save-msg"></span>
         </div>
       </div>
@@ -967,6 +978,10 @@ async function loadProfile() {
   pwSt.textContent = p.has_gmail_app_password ? 'Saved' : 'Not set';
   pwSt.style.color = p.has_gmail_app_password ? 'var(--green)' : 'var(--red)';
 
+  const waSt = document.getElementById('whatsapp-status');
+  waSt.textContent = p.has_whatsapp ? '✅ Connected' : 'Not connected';
+  waSt.style.color = p.has_whatsapp ? 'var(--green)' : 'var(--red)';
+
   // Plan badge
   const badge = document.getElementById('plan-badge');
   if (p.is_paid) {
@@ -992,9 +1007,32 @@ async function loadProfile() {
   }
 }
 
+async function connectWhatsApp() {
+  const btn = document.getElementById('connect-whatsapp-btn');
+  const st  = document.getElementById('whatsapp-status');
+  btn.disabled = true; btn.textContent = 'Connecting...';
+  try {
+    const res  = await fetch('/api/whatsapp/connect', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      // Real flow: launch Meta's Embedded Signup popup here using
+      // data.app_id / data.config_id, then re-check /api/profile
+      // once the popup reports success.
+      await loadProfile();
+    } else {
+      st.textContent = data.message || 'Could not connect right now.';
+      st.style.color = 'var(--red)';
+    }
+  } catch (e) {
+    st.textContent = 'Network error. Please try again.';
+    st.style.color = 'var(--red)';
+  }
+  btn.disabled = false; btn.textContent = 'Connect WhatsApp';
+}
+
 async function saveProfile() {
   const msg = document.getElementById('save-msg');
-  const btn = document.querySelector('.save-btn');
+  const btn = document.getElementById('save-profile-btn');
   const data = {
     full_name:     document.getElementById('full_name').value,
     business_name: document.getElementById('business_name').value,
@@ -1083,6 +1121,7 @@ function updateSelectedCount() {
   const n = selectedLeadIds.size;
   document.getElementById('selected-count').textContent = n + ' selected';
   document.getElementById('send-selected-btn').disabled = (n === 0);
+  document.getElementById('send-whatsapp-selected-btn').disabled = (n === 0);
 }
 
 function toggleLeadSelected(id, checked) {
@@ -1251,6 +1290,23 @@ async function sendToSelected() {
     _runMode = 'send';
     startPolling();
   } catch(e) { alert('Network error. Please try again.'); btn.disabled=false; btn.textContent='Send Emails to Selected'; }
+}
+
+async function sendWhatsAppToSelected() {
+  const ids = Array.from(selectedLeadIds);
+  if (ids.length === 0) return;
+  const btn = document.getElementById('send-whatsapp-selected-btn');
+  if (!confirm('Send a WhatsApp message to ' + ids.length + ' selected lead' + (ids.length===1?'':'s') + '?')) return;
+  btn.disabled = true; btn.textContent = 'Sending...';
+  try {
+    const res  = await fetch('/api/send-whatsapp-selected', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({lead_ids:ids}) });
+    const data = await res.json();
+    if (!data.ok) { alert(data.message || 'Could not start sending.'); btn.disabled=false; btn.textContent='Send WhatsApp message to Selected'; return; }
+    selectedLeadIds.clear();
+    switchTab('run');
+    _runMode = 'send';
+    startPolling();
+  } catch(e) { alert('Network error. Please try again.'); btn.disabled=false; btn.textContent='Send WhatsApp message to Selected'; }
 }
 
 /* ── Sent Emails ─────────────────────────────────────── */
