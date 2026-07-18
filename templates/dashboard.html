@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Client Agent</title>
+<title>Vajra Labs</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -505,6 +505,8 @@ body {
 }
 .exp-meet { background: var(--blue); color: #fff; box-shadow: 0 0 12px var(--glow); }
 .exp-meet:hover { background: var(--blue2); }
+.exp-whatsapp { background: #25D366; color: #06210f; }
+.exp-whatsapp:hover { background: #2fe374; }
 .exp-copy { background: var(--s3); color: var(--t2); border: 1px solid var(--bdr); }
 .exp-copy:hover { color: var(--t1); }
 
@@ -695,7 +697,7 @@ body {
       <div class="sb-mark">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
       </div>
-      <div class="sb-name">AI Client <span>Agent</span></div>
+      <div class="sb-name">Vajra <span>Labs</span></div>
     </div>
 
     <div class="sb-nav">
@@ -968,6 +970,7 @@ async function loadProfile() {
   const data = await res.json();
   if (!data.ok) return;
   const p = data.profile;
+  window._myProfile = p;
   document.getElementById('full_name').value      = p.full_name || '';
   document.getElementById('business_name').value  = p.business_name || '';
   document.getElementById('your_service').value   = p.your_service || '';
@@ -1224,6 +1227,7 @@ async function loadLeads() {
           </div>
           <div class="expand-actions">
             <button class="exp-btn exp-meet" onclick="event.stopPropagation();startMeet('${safeEmail}','${safeName}')">Start Google Meet</button>
+            ${l.phone ? `<button class="exp-btn exp-whatsapp" onclick="event.stopPropagation();openWhatsAppChat('${l.phone}','${safeName}')">Send via WhatsApp</button>` : ''}
             ${l.email ? `<button class="exp-btn exp-copy" onclick="event.stopPropagation();copyText('${safeEmail}')">Copy Email</button>` : ''}
             ${l.phone ? `<button class="exp-btn exp-copy" onclick="event.stopPropagation();copyText('${l.phone}')">Copy Phone</button>` : ''}
           </div>
@@ -1244,6 +1248,21 @@ function toggleExpand(id) {
   document.querySelectorAll('.lead-expand.open').forEach(el => el.classList.remove('open'));
   document.querySelectorAll('.lead-card.expanded').forEach(el => el.classList.remove('expanded'));
   if (!isOpen) { expand.classList.add('open'); card.classList.add('expanded'); }
+}
+
+function openWhatsAppChat(phone, businessName) {
+  let digits = (phone || '').replace(/[^\d+]/g, '').replace(/^\+/, '');
+  if (!digits) { alert('No phone number on file for this lead.'); return; }
+  if (digits.length === 10) digits = '91' + digits; // assume Indian mobile if no country code
+
+  const p = window._myProfile || {};
+  const myName    = p.full_name || '';
+  const myService = p.your_service || 'my services';
+  const greeting  = businessName ? 'Hi ' + businessName + ' team,' : 'Hi there,';
+
+  const message = greeting + ' this is ' + myName + '. I wanted to reach out about ' + myService + ' \u2014 happy to share more if you\'re interested!';
+  const url = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(message);
+  window.open(url, '_blank');
 }
 
 function startMeet(email, name) {
