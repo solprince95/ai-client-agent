@@ -1,5 +1,5 @@
 """
-app.py — AI Client Agent (multi-user SaaS edition)
+app.py, AI Client Agent (multi-user SaaS edition)
 Flask + Supabase Auth. Deployed on Render.
 
 Routes:
@@ -8,16 +8,16 @@ Routes:
   /api/auth/signup     create account (Supabase Auth)
   /api/auth/login      log in
   /api/auth/logout     log out
-  /api/profile         GET/POST — read or save the user's profile
+  /api/profile         GET/POST, read or save the user's profile
   /api/status          profile completeness + trial/license status
   /api/run             discover businesses + save as leads (no sending)
   /api/send-selected   send AI-personalised emails to chosen lead IDs
   /api/check-replies   check this user's Gmail inbox for replies
   /api/stream          Server-Sent Events log stream for the current run
-  /api/sent_emails     GET — list of emails actually sent
-  /api/leads           GET — CRM lead list, filterable by status/group/search
-  /api/leads/<id>      PATCH — update a lead's status or group tag
-  /api/leads/groups    GET — distinct group tags for the filter dropdown
+  /api/sent_emails     GET, list of emails actually sent
+  /api/leads           GET, CRM lead list, filterable by status/group/search
+  /api/leads/<id>      PATCH, update a lead's status or group tag
+  /api/leads/groups    GET, distinct group tags for the filter dropdown
 """
 
 import os
@@ -48,11 +48,37 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
 
-# Your Google Maps API key — set this as an environment variable on
+# Your Google Maps API key, set this as an environment variable on
 # Render (Settings → Environment), never hardcode it here.
 OWNER_GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 
 TRIAL_DAYS = 5
+
+# ══════════════════════════════════════════════════════
+#  MAINTENANCE MODE
+#  Toggle by setting MAINTENANCE_MODE=true as an env var on Render
+#  (Settings → Environment), no code changes/redeploys needed to
+#  flip it on or off, Render just restarts the app with the new value.
+#  Add ?bypass=<MAINTENANCE_BYPASS_KEY> to any URL to keep working on
+#  the site yourself while it's showing to everyone else.
+# ══════════════════════════════════════════════════════
+MAINTENANCE_MODE = os.environ.get("MAINTENANCE_MODE", "false").lower() == "true"
+MAINTENANCE_BYPASS_KEY = os.environ.get("MAINTENANCE_BYPASS_KEY", "")
+
+
+@app.before_request
+def _check_maintenance_mode():
+    if not MAINTENANCE_MODE:
+        return None
+    if request.path.startswith("/static/"):
+        return None
+    if session.get("maintenance_bypass") is True:
+        return None
+    if MAINTENANCE_BYPASS_KEY and request.args.get("bypass") == MAINTENANCE_BYPASS_KEY:
+        session["maintenance_bypass"] = True
+        return None
+    return render_template("maintenance.html"), 503
+
 
 # In-memory per-user run state (log queue, running flag).
 # Fine for a single Render instance; if you ever scale to multiple
@@ -269,7 +295,7 @@ def api_whatsapp_connect():
     """
     Kicks off WhatsApp connection for this user.
 
-    ⚠️ PLACEHOLDER: real Meta Embedded Signup isn't wired up yet — that
+    ⚠️ PLACEHOLDER: real Meta Embedded Signup isn't wired up yet, that
     requires registering this app as a Meta Tech Provider, completing
     App Review, and hosting the Facebook JS SDK popup on the frontend.
     Once META_APP_ID / META_CONFIG_ID env vars are set, replace this
@@ -281,7 +307,7 @@ def api_whatsapp_connect():
     if not meta_app_id:
         return jsonify({
             "ok": False,
-            "message": "WhatsApp connection isn't set up yet on our end — check back soon!"
+            "message": "WhatsApp connection isn't set up yet on our end, check back soon!"
         })
     # Real flow would return signup config here, e.g.:
     # return jsonify({"ok": True, "app_id": meta_app_id, "config_id": os.environ.get("META_CONFIG_ID", "")})
@@ -339,7 +365,7 @@ def _build_config(profile):
         "DELAY_BETWEEN_EMAILS": 3,
         "ATTACHMENT_PATH": "",
         "ATTACHMENT_NAME": "",
-        # WhatsApp Cloud API — blank until the user connects (Embedded
+        # WhatsApp Cloud API, blank until the user connects (Embedded
         # Signup flow not built yet). See whatsapp_agent.py.
         "WHATSAPP_ACCESS_TOKEN": profile.get("whatsapp_access_token", "") or "",
         "WHATSAPP_PHONE_NUMBER_ID": profile.get("whatsapp_phone_number_id", "") or "",
@@ -364,7 +390,7 @@ def _check_trial_or_paid(profile):
 def api_run():
     """
     Discovery only: finds businesses, gets websites/phones/emails, and
-    saves them to the leads table as 'discovered'. Sends NO emails —
+    saves them to the leads table as 'discovered'. Sends NO emails :
     the user picks who to email from the Leads tab afterwards.
     """
     uid = session["user_id"]
@@ -463,7 +489,7 @@ def api_send_whatsapp_selected():
     /api/send-selected but for the WhatsApp channel.
 
     Body: { "lead_ids": [...], "use_template": true|false }
-    use_template defaults to true — WhatsApp requires an approved
+    use_template defaults to true, WhatsApp requires an approved
     template for the first message to a new contact (cold outreach).
     Set to false only for a reply within an existing 24h conversation.
     """
@@ -639,7 +665,7 @@ def api_poll():
     """
     The browser calls this every second while a run is active.
     Returns all log lines queued since the last poll, plus running/done status.
-    Never blocks — drains the queue instantly and returns.
+    Never blocks, drains the queue instantly and returns.
     """
     uid = session["user_id"]
     state = get_user_state(uid)
@@ -666,7 +692,7 @@ def api_poll():
 
 
 # ══════════════════════════════════════════════════════
-#  MAIN (local dev only — Render uses gunicorn, see Procfile)
+#  MAIN (local dev only, Render uses gunicorn, see Procfile)
 # ══════════════════════════════════════════════════════
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

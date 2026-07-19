@@ -1,5 +1,5 @@
 """
-whatsapp_agent.py — WhatsApp outreach, mirrors agent_core.py's email pipeline.
+whatsapp_agent.py, WhatsApp outreach, mirrors agent_core.py's email pipeline.
 
 Uses the official WhatsApp Cloud API (Meta Graph API). Every business
 gets a phone number scraped the same way emails do (see agent_core.py),
@@ -21,7 +21,7 @@ from agent_core import BASE, _get_supabase, _noop, mark_lead_contacted  # reuse 
 
 WHATSAPP_SENT_CSV = os.path.join(BASE, "whatsapp_sent_log.csv")
 
-# Graph API version — bump when you upgrade.
+# Graph API version, bump when you upgrade.
 GRAPH_API_VERSION = "v21.0"
 
 PHONE_RE = re.compile(r"^\+?[1-9]\d{7,14}$")  # loose E.164-ish check
@@ -70,7 +70,7 @@ def build_whatsapp_template_payload(biz: dict, config: dict) -> dict:
     Cold-outreach (first contact) MUST use an approved template.
     template_name / language should be created + approved once in
     Meta Business Manager, then referenced here by name.
-    Placeholder template name below — replace once you've created
+    Placeholder template name below, replace once you've created
     and had one approved.
     """
     template_name = config.get("WHATSAPP_TEMPLATE_NAME", "business_outreach_intro")
@@ -177,7 +177,7 @@ def send_whatsapp_one(biz: dict, config: dict, log=_noop, user_id=None, use_temp
         return False
 
     if not whatsapp_configured(config):
-        log("  ⚠️ WhatsApp not connected yet — add WHATSAPP_ACCESS_TOKEN / "
+        log("  ⚠️ WhatsApp not connected yet, add WHATSAPP_ACCESS_TOKEN / "
             "WHATSAPP_PHONE_NUMBER_ID in Setup (Meta Embedded Signup) to enable sending.")
         return False
 
@@ -254,7 +254,7 @@ def send_whatsapp_to_selected_leads(lead_ids, config, log=_noop, user_id=None, u
         return {"ok": False, "sent": 0}
 
     if not lead_ids:
-        log("No leads selected — nothing to send.")
+        log("No leads selected, nothing to send.")
         return {"ok": True, "sent": 0}
 
     try:

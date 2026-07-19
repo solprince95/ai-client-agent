@@ -1,5 +1,5 @@
 """
-agent_core.py — Core agent logic, refactored for the web dashboard.
+agent_core.py, Core agent logic, refactored for the web dashboard.
 Same functionality as the CLI version, but every step reports progress
 through a `log(message)` callback so the dashboard can show live status.
 """
@@ -71,13 +71,13 @@ def run_diagnostics(config, log=_noop):
         if os.path.exists(path):
             log(f"✅ Attachment ready: {config['ATTACHMENT_PATH']}")
         else:
-            log(f"⚠️  Attachment '{config['ATTACHMENT_PATH']}' not found — will send without it.")
+            log(f"⚠️  Attachment '{config['ATTACHMENT_PATH']}' not found, will send without it.")
 
     return ok
 
 
 # ══════════════════════════════════════════════════════
-#  STEP 1 — Find businesses via Google Maps
+#  STEP 1, Find businesses via Google Maps
 # ══════════════════════════════════════════════════════
 def search_businesses(config, log=_noop):
     city = config["TARGET_CITY"]
@@ -125,7 +125,7 @@ def search_businesses(config, log=_noop):
 
 
 # ══════════════════════════════════════════════════════
-#  STEP 2 — Filter businesses with websites
+#  STEP 2, Filter businesses with websites
 # ══════════════════════════════════════════════════════
 def fetch_websites(businesses, config, log=_noop):
     log("Checking each business for a website and phone number...")
@@ -147,14 +147,14 @@ def fetch_websites(businesses, config, log=_noop):
         except Exception:
             pass
         if i % 10 == 0 or i == len(businesses):
-            log(f"  Checked {i}/{len(businesses)} — {len(with_sites)} have websites so far")
+            log(f"  Checked {i}/{len(businesses)}, {len(with_sites)} have websites so far")
         time.sleep(0.2)
     log(f"{len(with_sites)} of {len(businesses)} businesses have a website.")
     return with_sites
 
 
 # ══════════════════════════════════════════════════════
-#  STEP 3 — Extract emails from websites
+#  STEP 3, Extract emails from websites
 # ══════════════════════════════════════════════════════
 
 # Large chains / platforms that will never respond to cold outreach
@@ -489,11 +489,11 @@ def find_emails(businesses, log=_noop):
 
     for i, biz in enumerate(businesses, 1):
         if time.time() > global_deadline:
-            log(f"  ⏱ Time limit reached — skipping remaining {len(businesses)-i+1} site(s).")
+            log(f"  ⏱ Time limit reached, skipping remaining {len(businesses)-i+1} site(s).")
             break
 
         if _should_skip(biz.get("website", "")):
-            log(f"  [{i}/{len(businesses)}] {biz.get('name','?')[:35]} → — skipped (large chain)")
+            log(f"  [{i}/{len(businesses)}] {biz.get('name','?')[:35]}: skipped (large chain)")
             continue
 
         info = extract_contact_info(biz["website"])
@@ -504,14 +504,14 @@ def find_emails(businesses, log=_noop):
             biz["people_phones"] = ",".join(info.get("people_phones", []))
             biz["people_data"]   = json.dumps(info.get("people_data", []), ensure_ascii=False)
             with_emails.append(biz)
-        log(f"  [{i}/{len(businesses)}] {biz.get('name','?')[:35]} → {'✅ ' + em if em else '— no email'}")
+        log(f"  [{i}/{len(businesses)}] {biz.get('name','?')[:35]}: {'✅ ' + em if em else 'no email'}")
 
     log(f"{len(with_emails)} businesses with usable email addresses.")
     return with_emails
 
 
 # ══════════════════════════════════════════════════════
-#  STEP 4 — Build the personalised email
+#  STEP 4, Build the personalised email
 # ══════════════════════════════════════════════════════
 def build_email(biz, config):
     name    = biz["name"]
@@ -547,7 +547,7 @@ Reply "Unsubscribe" if you'd prefer not to hear from me again.
 
 
 # ══════════════════════════════════════════════════════
-#  STEP 5 — Send emails
+#  STEP 5, Send emails
 #  Sent log is stored in Supabase (sent_log table) so it
 #  persists across Render restarts and redeploys.
 #  Falls back to local CSV if Supabase is not configured.
@@ -637,7 +637,7 @@ def mark_sent(addr, name="", website="", user_id=None, subject="", body=""):
 # ══════════════════════════════════════════════════════
 #  LEADS (CRM)
 #  Every business the agent finds gets persisted here, not
-#  just the ones it successfully emails — this is what powers
+#  just the ones it successfully emails, this is what powers
 #  the CRM dashboard (search, grouping, score, status).
 # ══════════════════════════════════════════════════════
 def compute_match_score(biz, target_business_types=None):
@@ -712,7 +712,7 @@ def upsert_leads(businesses, config, log=_noop, user_id=None):
                        .eq("email", row["email"]).execute()
 
             if exists.data:
-                # Row exists — update it, preserving status if past 'discovered'
+                # Row exists, update it, preserving status if past 'discovered'
                 existing_status = exists.data[0].get("status", "discovered")
                 update_row = {
                     "business_name": row["business_name"],
@@ -732,14 +732,14 @@ def upsert_leads(businesses, config, log=_noop, user_id=None):
                   .eq("user_id", row["user_id"]).eq("email", row["email"]).execute()
                 updated += 1
             else:
-                # New lead — insert it
+                # New lead, insert it
                 sb.table("leads").insert(row).execute()
                 inserted += 1
         except Exception as e:
             err_str = str(e)
             if "23505" in err_str or "duplicate key" in err_str.lower():
                 # Race condition: another process inserted between our update check
-                # and our insert — safe to ignore, the row is already there
+                # and our insert, safe to ignore, the row is already there
                 updated += 1
             else:
                 errors += 1
@@ -805,7 +805,7 @@ def get_leads(user_id, status=None, search=None):
 
 
 def update_lead(lead_id, user_id, fields):
-    """Update a single lead — used for status/group changes from the CRM UI."""
+    """Update a single lead, used for status/group changes from the CRM UI."""
     sb = _get_supabase()
     if not sb:
         return False
@@ -937,13 +937,13 @@ def check_replies(config, log=_noop, user_id=None):
 
     contacted = load_sent(user_id=user_id)
     if not contacted:
-        log("📭 No sent emails on record yet — run the agent first.")
+        log("📭 No sent emails on record yet, run the agent first.")
         return replies
 
     log(f"   Checking for replies from {len(contacted)} contacted business(es)...")
 
     if not config.get("GMAIL_APP_PASSWORD"):
-        log("⚠️  No Gmail App Password on file — add one in Setup to enable reply checking.")
+        log("⚠️  No Gmail App Password on file, add one in Setup to enable reply checking.")
         return replies
 
     def _check():
@@ -967,7 +967,7 @@ def check_replies(config, log=_noop, user_id=None):
                 return inner_replies
 
             # Fetch ALL From headers in one single IMAP call (not one per email)
-            # Format: "1,2,3,4,..." — IMAP supports comma-separated ID sets
+            # Format: "1,2,3,4,...", IMAP supports comma-separated ID sets
             id_set = b",".join(all_ids)
             _, header_data = mail.fetch(id_set, "(BODY[HEADER.FIELDS (FROM)])")
 
@@ -1020,7 +1020,7 @@ def check_replies(config, log=_noop, user_id=None):
                         })
                         mark_lead_replied(sender_addr, user_id=user_id,
                                           reply_subject=subject_str)
-                        log(f"  🎉 REPLY from {sender_raw} — \"{subject_str}\"")
+                        log(f"  🎉 REPLY from {sender_raw}, \"{subject_str}\"")
                 except Exception:
                     continue
 
@@ -1065,7 +1065,7 @@ def run_discovery(config, log=_noop, user_id=None):
 
     upsert_leads(leads, config, log=log, user_id=user_id)
 
-    log(f"✅ Discovery complete — {len(leads)} lead(s) ready for review in the Leads tab.")
+    log(f"✅ Discovery complete, {len(leads)} lead(s) ready for review in the Leads tab.")
     return {"ok": True, "found": len(biz), "with_sites": len(sites),
             "with_emails": len(leads)}
 
@@ -1081,7 +1081,7 @@ def send_to_selected_leads(lead_ids, config, log=_noop, user_id=None):
         return {"ok": False, "sent": 0}
 
     if not lead_ids:
-        log("No leads selected — nothing to send.")
+        log("No leads selected, nothing to send.")
         return {"ok": True, "sent": 0}
 
     try:
@@ -1116,7 +1116,7 @@ def send_to_selected_leads(lead_ids, config, log=_noop, user_id=None):
 def run_full_pipeline(config, log=_noop, user_id=None):
     """
     Legacy one-shot pipeline (discover + send everyone immediately).
-    Kept for backward compatibility — the dashboard now uses
+    Kept for backward compatibility, the dashboard now uses
     run_discovery() followed by send_to_selected_leads() instead,
     so the user can review and choose who gets emailed.
     """
@@ -1135,7 +1135,7 @@ def run_full_pipeline(config, log=_noop, user_id=None):
     if config.get("GMAIL_APP_PASSWORD"):
         check_replies(config, log=log, user_id=user_id)
     else:
-        log("📭 Reply checking skipped — add a Gmail App Password in Setup to track replies automatically.")
+        log("📭 Reply checking skipped, add a Gmail App Password in Setup to track replies automatically.")
 
     log("✅ Run complete!")
     return {"ok": True, "found": len(biz), "with_sites": len(sites),
@@ -1146,7 +1146,7 @@ def run_full_pipeline(config, log=_noop, user_id=None):
 #  STATS
 # ══════════════════════════════════════════════════════
 def get_stats(user_id=None):
-    """Total emails sent — from Supabase if available, else local CSV."""
+    """Total emails sent, from Supabase if available, else local CSV."""
     sb = _get_supabase()
     if sb and user_id:
         try:

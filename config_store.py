@@ -1,6 +1,6 @@
 """
-config_store.py — Loads & saves the user's profile as JSON.
-Replaces the old config.py — now editable through the dashboard UI.
+config_store.py, Loads & saves the user's profile as JSON.
+Replaces the old config.py, now editable through the dashboard UI.
 """
 
 import os, json
@@ -11,7 +11,7 @@ BASE = get_base_dir()
 CONFIG_PATH = os.path.join(BASE, "user_config.json")
 
 # ⚠️ OWNER: put YOUR Google Maps API key here.
-# Customers never see or need their own key — you cover this centrally.
+# Customers never see or need their own key, you cover this centrally.
 OWNER_GOOGLE_MAPS_API_KEY = "AIzaSyC7BszKyHwmYqIfletuTQszUA_J2fH9siE"
 
 DEFAULT_CONFIG = {
@@ -31,7 +31,7 @@ DEFAULT_CONFIG = {
     "GMAIL_ADDRESS":       "",
     "GMAIL_APP_PASSWORD":  "",
 
-    # WhatsApp Cloud API (Meta) — filled in once the user connects via
+    # WhatsApp Cloud API (Meta), filled in once the user connects via
     # the Embedded Signup flow (not built yet). Left blank = WhatsApp
     # sending is skipped gracefully (see whatsapp_agent.whatsapp_configured).
     "WHATSAPP_ACCESS_TOKEN":   "",
@@ -55,7 +55,7 @@ def load_config():
     else:
         data = {}
     cfg = {**DEFAULT_CONFIG, **data}
-    # Always inject the owner's API key — customer never sets this
+    # Always inject the owner's API key, customer never sets this
     cfg["GOOGLE_MAPS_API_KEY"] = OWNER_GOOGLE_MAPS_API_KEY
     return cfg
 

@@ -1,5 +1,5 @@
 """
-paths.py — shared helper for resolving file paths in both:
+paths.py, shared helper for resolving file paths in both:
   - normal "python app.py" development mode, and
   - a PyInstaller-bundled single-file executable.
 
@@ -17,7 +17,7 @@ Why this exists:
                             Use this for Flask's template_folder / static_folder.
 
   In normal "python app.py" mode, both functions simply return the
-  folder containing this file — so nothing changes for development.
+  folder containing this file, so nothing changes for development.
 """
 
 import os
@@ -26,7 +26,7 @@ import sys
 
 def get_base_dir() -> str:
     if getattr(sys, "frozen", False):
-        # Running as a PyInstaller bundle — use the folder containing
+        # Running as a PyInstaller bundle, use the folder containing
         # the actual .exe / binary, so data persists between runs.
         return os.path.dirname(os.path.abspath(sys.executable))
     return os.path.dirname(os.path.abspath(__file__))
