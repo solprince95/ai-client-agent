@@ -140,6 +140,26 @@ def dashboard():
     return render_template("dashboard.html")
 
 
+@app.route("/privacy")
+def privacy_page():
+    return render_template("privacy.html")
+
+
+@app.route("/terms")
+def terms_page():
+    return render_template("terms.html")
+
+
+@app.route("/refund-policy")
+def refund_policy_page():
+    return render_template("refund-policy.html")
+
+
+@app.route("/contact")
+def contact_page():
+    return render_template("contact.html")
+
+
 # ======================================================
 #  AUTH
 # ======================================================
