@@ -853,7 +853,7 @@ body {
                 <span id="whatsapp-status" style="font-weight:700;margin-left:10px;"></span>
               </div>
               <div class="field-hint">
-                Opens Meta's secure sign-in to link your WhatsApp Business number — no manual setup needed.
+                Opens Meta's secure sign-in to link your WhatsApp Business number, no manual setup needed.
               </div>
             </div>
             <div class="form-field">
@@ -1260,7 +1260,7 @@ function openWhatsAppChat(phone, businessName) {
   const myService = p.your_service || 'my services';
   const greeting  = businessName ? 'Hi ' + businessName + ' team,' : 'Hi there,';
 
-  const message = greeting + ' this is ' + myName + '. I wanted to reach out about ' + myService + ' \u2014 happy to share more if you\'re interested!';
+  const message = greeting + ' this is ' + myName + '. I wanted to reach out about ' + myService + ', happy to share more if you\'re interested!';
   const url = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(message);
   window.open(url, '_blank');
 }

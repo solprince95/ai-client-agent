@@ -519,7 +519,7 @@ def build_email(biz, config):
     domain  = urlparse(website).netloc.replace("www.", "") if website else ""
     site_line = f" ({domain})" if domain else ""
 
-    subject = f"Quick offer for {name} — {config['YOUR_SERVICE']}"
+    subject = f"Quick offer for {name}: {config['YOUR_SERVICE']}"
 
     attach_line = "I've attached a sample of my work for your reference.\n\n" if config.get("ATTACHMENT_PATH") else ""
 
@@ -531,7 +531,7 @@ My name is {config['YOUR_NAME']}.
 
 I came across your business{site_line} and thought you might benefit from {config['YOUR_SERVICE'].lower()}.
 
-If this sounds useful for {name}, I'd be happy to share more details — including pricing and how we can get started.
+If this sounds useful for {name}, I'd be happy to share more details, including pricing and how we can get started.
 
 {attach_line}Simply reply to this email and I'll get back to you within 24 hours.
 

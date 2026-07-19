@@ -57,10 +57,10 @@ def _is_valid_phone(raw: str) -> bool:
 def build_whatsapp_freeform_message(biz: dict, config: dict) -> str:
     name = biz.get("name", "there")
     return (
-        f"Hi {name} team! This is {config.get('YOUR_NAME','')} — "
+        f"Hi {name} team! This is {config.get('YOUR_NAME','')}. "
         f"{config.get('YOUR_ABOUT','')}\n\n"
         f"I thought {config.get('YOUR_SERVICE','')} could help your business. "
-        f"Happy to share more details if you're interested — just reply here!\n\n"
+        f"Happy to share more details if you're interested, just reply here!\n\n"
         f"Reply STOP if you'd rather not hear from me again."
     )
 
