@@ -1,9 +1,9 @@
--- ══════════════════════════════════════════════════════
+-- ======================================================
 -- WhatsApp support migration
 -- Run this once in the Supabase SQL editor.
--- ══════════════════════════════════════════════════════
+-- ======================================================
 
--- 1) profiles — where each user's WhatsApp Business connection lives.
+-- 1) profiles : where each user's WhatsApp Business connection lives.
 --    Values are blank until the "Connect WhatsApp" flow is built
 --    (Meta Embedded Signup). For now they can be filled in manually
 --    for testing.
@@ -14,7 +14,7 @@ alter table public.profiles
   add column if not exists whatsapp_template_name text default 'business_outreach_intro',
   add column if not exists whatsapp_template_lang text default 'en_US';
 
--- 2) leads — track WhatsApp outreach status independently from email
+-- 2) leads : track WhatsApp outreach status independently from email
 --    status, on the same lead row.
 alter table public.leads
   add column if not exists whatsapp_status text default 'discovered',
@@ -22,7 +22,7 @@ alter table public.leads
   add column if not exists whatsapp_message_sent text default '',
   add column if not exists whatsapp_replied_at timestamptz;
 
--- 3) whatsapp_log — mirrors sent_log, one row per WhatsApp message sent.
+-- 3) whatsapp_log : mirrors sent_log, one row per WhatsApp message sent.
 create table if not exists public.whatsapp_log (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,

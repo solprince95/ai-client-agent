@@ -930,26 +930,32 @@ body {
 
           <div id="pay-section" style="display:none;">
             <div class="billing-divider"></div>
-            <div class="card-title" style="margin-bottom:12px;">How to activate</div>
+            <div class="card-title" style="margin-bottom:12px;">Activate your plan</div>
 
-            <div class="billing-step">
-              <span class="billing-step-num">01</span>
-              <span>Pay <strong>Rs. 999</strong> via UPI to the ID below.</span>
-            </div>
-            <div class="billing-step">
-              <span class="billing-step-num">02</span>
-              <span>Send a screenshot of the payment on WhatsApp to <strong>+91 9913620474</strong>.</span>
-            </div>
-            <div class="billing-step">
-              <span class="billing-step-num">03</span>
-              <span>Your account will be activated within a few hours.</span>
-            </div>
+            <button class="save-btn" id="upgrade-btn" onclick="startUpgrade()" type="button">Upgrade now, Rs. 999/month</button>
+            <div id="upgrade-message" style="margin-top:10px; font-size:.82rem;"></div>
 
-            <div class="upi-box">sol.prince95@okicici</div>
-            <img src="/static/qr.png" alt="UPI QR Code" class="qr-img"/>
-            <div class="billing-note">
-              Scan the QR code or copy the UPI ID above.
-              Once payment is confirmed, all limits are removed permanently for 30 days.
+            <div id="manual-pay-fallback" style="display:none; margin-top:20px;">
+              <div class="card-title" style="margin-bottom:12px;">Or pay manually</div>
+              <div class="billing-step">
+                <span class="billing-step-num">01</span>
+                <span>Pay <strong>Rs. 999</strong> via UPI to the ID below.</span>
+              </div>
+              <div class="billing-step">
+                <span class="billing-step-num">02</span>
+                <span>Send a screenshot of the payment on WhatsApp to <strong>+91 9913620474</strong>.</span>
+              </div>
+              <div class="billing-step">
+                <span class="billing-step-num">03</span>
+                <span>Your account will be activated within a few hours.</span>
+              </div>
+
+              <div class="upi-box">sol.prince95@okicici</div>
+              <img src="/static/qr.png" alt="UPI QR Code" class="qr-img"/>
+              <div class="billing-note">
+                Scan the QR code or copy the UPI ID above.
+                Once payment is confirmed, all limits are removed permanently for 30 days.
+              </div>
             </div>
           </div>
         </div>
@@ -959,6 +965,7 @@ body {
   </main>
 </div>
 
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>
 /* ── Tab switching ───────────────────────────────────── */
 function switchTab(tab) {
@@ -1013,6 +1020,52 @@ async function loadProfile() {
   } else {
     billSt.textContent = 'Trial ended. Payment required'; billSt.className = 'billing-status ended';
     payEl.style.display = 'block';
+  }
+}
+
+async function startUpgrade() {
+  const btn = document.getElementById('upgrade-btn');
+  const msg = document.getElementById('upgrade-message');
+  const fallback = document.getElementById('manual-pay-fallback');
+  btn.disabled = true; btn.textContent = 'Starting checkout...';
+  msg.textContent = '';
+
+  try {
+    const res  = await fetch('/api/billing/create-subscription', { method: 'POST' });
+    const data = await res.json();
+
+    if (!data.ok) {
+      msg.textContent = data.message || 'Could not start checkout right now.';
+      msg.style.color = 'var(--red)';
+      fallback.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Upgrade now, Rs. 999/month';
+      return;
+    }
+
+    const rzp = new Razorpay({
+      key: data.key_id,
+      subscription_id: data.subscription_id,
+      name: 'Vajra Labs',
+      description: 'Monthly plan, Rs. 999/month',
+      theme: { color: '#1d6aff' },
+      handler: function (response) {
+        msg.textContent = 'Payment received, activating your plan. This takes a few seconds, refresh shortly.';
+        msg.style.color = 'var(--green)';
+        setTimeout(loadProfile, 4000);
+      },
+      modal: {
+        ondismiss: function () {
+          btn.disabled = false; btn.textContent = 'Upgrade now, Rs. 999/month';
+        }
+      }
+    });
+    rzp.open();
+    btn.disabled = false; btn.textContent = 'Upgrade now, Rs. 999/month';
+  } catch (e) {
+    msg.textContent = 'Network error, please try again.';
+    msg.style.color = 'var(--red)';
+    fallback.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Upgrade now, Rs. 999/month';
   }
 }
 

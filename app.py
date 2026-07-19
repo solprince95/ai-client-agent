@@ -31,11 +31,12 @@ from supabase import create_client, Client
 
 import agent_core
 import whatsapp_agent
+import billing_agent
 from paths import get_resource_dir
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  SETUP
-# ══════════════════════════════════════════════════════
+# ======================================================
 _resource_dir = get_resource_dir()
 app = Flask(
     __name__,
@@ -54,14 +55,14 @@ OWNER_GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 
 TRIAL_DAYS = 5
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  MAINTENANCE MODE
 #  Toggle by setting MAINTENANCE_MODE=true as an env var on Render
 #  (Settings → Environment), no code changes/redeploys needed to
 #  flip it on or off, Render just restarts the app with the new value.
 #  Add ?bypass=<MAINTENANCE_BYPASS_KEY> to any URL to keep working on
 #  the site yourself while it's showing to everyone else.
-# ══════════════════════════════════════════════════════
+# ======================================================
 MAINTENANCE_MODE = os.environ.get("MAINTENANCE_MODE", "false").lower() == "true"
 MAINTENANCE_BYPASS_KEY = os.environ.get("MAINTENANCE_BYPASS_KEY", "")
 
@@ -72,6 +73,8 @@ def _check_maintenance_mode():
         return None
     if request.path.startswith("/static/"):
         return None
+    if request.path == "/api/webhooks/razorpay":
+        return None  # Razorpay must always be able to reach this, maintenance or not
     if session.get("maintenance_bypass") is True:
         return None
     if MAINTENANCE_BYPASS_KEY and request.args.get("bypass") == MAINTENANCE_BYPASS_KEY:
@@ -121,9 +124,9 @@ def _get_profile(uid):
     return res.data or {}
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  PAGES
-# ══════════════════════════════════════════════════════
+# ======================================================
 @app.route("/")
 def index():
     if "user_id" in session:
@@ -137,9 +140,9 @@ def dashboard():
     return render_template("dashboard.html")
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  AUTH
-# ══════════════════════════════════════════════════════
+# ======================================================
 @app.route("/api/auth/signup", methods=["POST"])
 def api_signup():
     if supabase is None:
@@ -244,9 +247,9 @@ def api_logout():
     return jsonify({"ok": True, "redirect": "/"})
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  PROFILE
-# ══════════════════════════════════════════════════════
+# ======================================================
 @app.route("/api/profile", methods=["GET"])
 @login_required
 def api_get_profile():
@@ -314,9 +317,9 @@ def api_whatsapp_connect():
     return jsonify({"ok": False, "message": "WhatsApp connection is being finalized."})
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  STATUS
-# ══════════════════════════════════════════════════════
+# ======================================================
 @app.route("/api/status")
 @login_required
 def api_status():
@@ -341,9 +344,9 @@ def api_status():
         return jsonify({"ok": False, "message": str(e)})
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  RUN THE AGENT
-# ══════════════════════════════════════════════════════
+# ======================================================
 def _build_config(profile):
     business_types = profile.get("business_types") or (
         "small business,shop,store,restaurant,hotel,clinic,school,agency,company,office,pvt ltd,enterprise,industries"
@@ -583,9 +586,9 @@ def api_check_replies():
     return jsonify({"ok": True})
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  LOG STREAM (Server-Sent Events)
-# ══════════════════════════════════════════════════════
+# ======================================================
 
 @app.route("/api/sent_emails", methods=["GET"])
 @login_required
@@ -602,9 +605,9 @@ def api_sent_emails():
         return jsonify({"ok": False, "message": str(e)})
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  LEADS (CRM)
-# ══════════════════════════════════════════════════════
+# ======================================================
 @app.route("/api/leads", methods=["GET"])
 @login_required
 def api_get_leads():
@@ -691,9 +694,63 @@ def api_poll():
     })
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
+#  BILLING (Razorpay), "Billing Agent"
+# ======================================================
+@app.route("/api/billing/create-subscription", methods=["POST"])
+@login_required
+def api_billing_create_subscription():
+    """
+    Starts an automated ₹999/month subscription for the logged-in user.
+    Returns a subscription_id + key_id for the frontend to open Razorpay
+    Checkout. Nothing is activated yet, that happens once the webhook
+    confirms an actual successful charge.
+    """
+    uid = session["user_id"]
+    profile = _get_profile(uid)
+
+    email = profile.get("gmail", "") or ""
+    full_name = profile.get("full_name", "") or ""
+
+    if not email:
+        return jsonify({"ok": False, "message": "Please add your email in Setup before upgrading."})
+
+    result = billing_agent.create_subscription(uid, email, full_name)
+    return jsonify(result)
+
+
+@app.route("/api/billing/history", methods=["GET"])
+@login_required
+def api_billing_history():
+    uid = session["user_id"]
+    history = billing_agent.get_payment_history(uid, supabase)
+    return jsonify({"ok": True, "payments": history})
+
+
+@app.route("/api/webhooks/razorpay", methods=["POST"])
+def api_webhook_razorpay():
+    """
+    Razorpay calls this automatically after payment events, no browser/
+    session involved, this is server-to-server. We verify the signature
+    before trusting anything in the payload.
+    """
+    signature = request.headers.get("X-Razorpay-Signature", "")
+    raw_body = request.get_data()
+
+    if not billing_agent.verify_webhook_signature(raw_body, signature):
+        return jsonify({"ok": False, "message": "Invalid signature."}), 400
+
+    event = request.get_json(silent=True) or {}
+    result = billing_agent.handle_webhook_event(event, supabase)
+    # Always return 200 once signature is verified and we've processed it,
+    # even if result reports an internal issue, so Razorpay doesn't retry
+    # a webhook we've already handled/logged.
+    return jsonify(result), 200
+
+
+# ======================================================
 #  MAIN (local dev only, Render uses gunicorn, see Procfile)
-# ══════════════════════════════════════════════════════
+# ======================================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)

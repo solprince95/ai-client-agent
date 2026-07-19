@@ -27,9 +27,9 @@ GRAPH_API_VERSION = "v21.0"
 PHONE_RE = re.compile(r"^\+?[1-9]\d{7,14}$")  # loose E.164-ish check
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  CONFIG HELPERS
-# ══════════════════════════════════════════════════════
+# ======================================================
 def whatsapp_configured(config: dict) -> bool:
     """True once the user has connected a real WhatsApp Business number."""
     return bool(config.get("WHATSAPP_ACCESS_TOKEN") and config.get("WHATSAPP_PHONE_NUMBER_ID"))
@@ -46,14 +46,14 @@ def _is_valid_phone(raw: str) -> bool:
     return bool(PHONE_RE.match("+" + digits)) if digits else False
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  MESSAGE BUILDING
 #  NOTE: WhatsApp requires a pre-approved template for the very
 #  first message to someone who hasn't messaged you in the last
 #  24h. build_whatsapp_template_message() sends via a template;
 #  build_whatsapp_freeform_message() is for replies within the
 #  24h customer-service window (plain text, no approval needed).
-# ══════════════════════════════════════════════════════
+# ======================================================
 def build_whatsapp_freeform_message(biz: dict, config: dict) -> str:
     name = biz.get("name", "there")
     return (
@@ -91,9 +91,9 @@ def build_whatsapp_template_payload(biz: dict, config: dict) -> dict:
     }
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  SENT LOG  (mirrors load_sent / mark_sent in agent_core.py)
-# ══════════════════════════════════════════════════════
+# ======================================================
 def load_whatsapp_sent(user_id=None) -> set:
     sent = set()
     sb = _get_supabase()
@@ -163,9 +163,9 @@ def mark_lead_whatsapp_contacted(phone, user_id=None, message=""):
         print(f"mark_lead_whatsapp_contacted error: {e}", flush=True)
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  SEND
-# ══════════════════════════════════════════════════════
+# ======================================================
 def send_whatsapp_one(biz: dict, config: dict, log=_noop, user_id=None, use_template=True) -> bool:
     phone = biz.get("phone", "")
     if not _is_valid_phone(phone):
@@ -289,9 +289,9 @@ def send_whatsapp_to_selected_leads(lead_ids, config, log=_noop, user_id=None, u
     return {"ok": True, "sent": sent, "selected": len(lead_ids)}
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  STATS
-# ══════════════════════════════════════════════════════
+# ======================================================
 def get_whatsapp_stats(user_id=None):
     sb = _get_supabase()
     if sb and user_id:

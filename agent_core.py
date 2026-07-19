@@ -24,9 +24,9 @@ def _noop(msg):
     pass
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  DIAGNOSTICS
-# ══════════════════════════════════════════════════════
+# ======================================================
 def run_diagnostics(config, log=_noop):
     ok = True
     log("Running pre-flight checks...")
@@ -76,9 +76,9 @@ def run_diagnostics(config, log=_noop):
     return ok
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  STEP 1, Find businesses via Google Maps
-# ══════════════════════════════════════════════════════
+# ======================================================
 def search_businesses(config, log=_noop):
     city = config["TARGET_CITY"]
     queries = [(btype, f"{btype} {city}") for btype in config["BUSINESS_TYPES"]]
@@ -124,9 +124,9 @@ def search_businesses(config, log=_noop):
     return list(all_biz.values())
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  STEP 2, Filter businesses with websites
-# ══════════════════════════════════════════════════════
+# ======================================================
 def fetch_websites(businesses, config, log=_noop):
     log("Checking each business for a website and phone number...")
     with_sites = []
@@ -153,9 +153,9 @@ def fetch_websites(businesses, config, log=_noop):
     return with_sites
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  STEP 3, Extract emails from websites
-# ══════════════════════════════════════════════════════
+# ======================================================
 
 # Large chains / platforms that will never respond to cold outreach
 # and whose sites are slow, JS-heavy, or bot-protected.
@@ -510,9 +510,9 @@ def find_emails(businesses, log=_noop):
     return with_emails
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  STEP 4, Build the personalised email
-# ══════════════════════════════════════════════════════
+# ======================================================
 def build_email(biz, config):
     name    = biz["name"]
     website = biz.get("website") or ""
@@ -546,12 +546,12 @@ Reply "Unsubscribe" if you'd prefer not to hear from me again.
     return subject, body
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  STEP 5, Send emails
 #  Sent log is stored in Supabase (sent_log table) so it
 #  persists across Render restarts and redeploys.
 #  Falls back to local CSV if Supabase is not configured.
-# ══════════════════════════════════════════════════════
+# ======================================================
 def _get_supabase():
     """Return a Supabase client if env vars are set, else None."""
     try:
@@ -634,12 +634,12 @@ def mark_sent(addr, name="", website="", user_id=None, subject="", body=""):
         })
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  LEADS (CRM)
 #  Every business the agent finds gets persisted here, not
 #  just the ones it successfully emails, this is what powers
 #  the CRM dashboard (search, grouping, score, status).
-# ══════════════════════════════════════════════════════
+# ======================================================
 def compute_match_score(biz, target_business_types=None):
     """
     Simple, explainable scoring from data we already have:
@@ -922,9 +922,9 @@ def send_all(businesses, config, log=_noop, user_id=None):
     return sent
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  CHECK REPLIES
-# ══════════════════════════════════════════════════════
+# ======================================================
 def check_replies(config, log=_noop, user_id=None):
     """
     Check Gmail inbox for replies from contacted businesses.
@@ -1046,9 +1046,9 @@ def check_replies(config, log=_noop, user_id=None):
     return replies
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  FULL PIPELINE
-# ══════════════════════════════════════════════════════
+# ======================================================
 def run_discovery(config, log=_noop, user_id=None):
     """
     STEP 1 of 2: find businesses, get their websites/phones/emails, save
@@ -1142,9 +1142,9 @@ def run_full_pipeline(config, log=_noop, user_id=None):
             "with_emails": len(leads), "sent": sent}
 
 
-# ══════════════════════════════════════════════════════
+# ======================================================
 #  STATS
-# ══════════════════════════════════════════════════════
+# ======================================================
 def get_stats(user_id=None):
     """Total emails sent, from Supabase if available, else local CSV."""
     sb = _get_supabase()
