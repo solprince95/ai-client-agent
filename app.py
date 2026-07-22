@@ -299,6 +299,7 @@ def api_save_profile():
         "full_name", "business_name", "gmail",
         "your_service", "your_about", "target_city", "business_types",
         "gmail_app_password",
+        "whatsapp_access_token", "whatsapp_phone_number_id", "whatsapp_business_account_id",
     ]
     update = {k: v for k, v in data.items() if k in allowed}
 

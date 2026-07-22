@@ -872,6 +872,21 @@ body {
               </div>
               <div class="field-hint">
                 Opens Meta's secure sign-in to link your WhatsApp Business number, no manual setup needed.
+                This one-click option isn't ready yet, use manual setup below until then.
+              </div>
+
+              <div style="margin-top:14px;">
+                <button type="button" class="field-hint" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline;color:var(--blue2);" onclick="toggleWhatsAppManual()">Connect manually instead</button>
+                <div id="whatsapp-manual-fields" style="display:none;margin-top:12px;">
+                  <input type="text" class="field-inp" id="wa_access_token" placeholder="Access Token" style="margin-bottom:8px;"/>
+                  <input type="text" class="field-inp" id="wa_phone_number_id" placeholder="Phone Number ID" style="margin-bottom:8px;"/>
+                  <input type="text" class="field-inp" id="wa_business_account_id" placeholder="WhatsApp Business Account ID" style="margin-bottom:8px;"/>
+                  <button class="save-btn" id="save-whatsapp-manual-btn" onclick="saveWhatsAppManual()" type="button">Save WhatsApp Details</button>
+                  <div class="field-hint">
+                    Find these in Meta App Dashboard -> WhatsApp -> API Setup. A temporary access token lasts 24 hours,
+                    for anything longer-term you'll want a permanent token later.
+                  </div>
+                </div>
               </div>
             </div>
             <div class="form-field">
@@ -1110,6 +1125,47 @@ async function startUpgrade() {
     fallback.style.display = 'block';
     btn.disabled = false; btn.textContent = 'Upgrade now, Rs. 999/month';
   }
+}
+
+function toggleWhatsAppManual() {
+  const el = document.getElementById('whatsapp-manual-fields');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function saveWhatsAppManual() {
+  const btn = document.getElementById('save-whatsapp-manual-btn');
+  const token   = document.getElementById('wa_access_token').value.trim();
+  const phoneId = document.getElementById('wa_phone_number_id').value.trim();
+  const wabaId  = document.getElementById('wa_business_account_id').value.trim();
+
+  if (!token || !phoneId) {
+    alert('Access Token and Phone Number ID are both required.');
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    const res = await fetch('/api/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        whatsapp_access_token: token,
+        whatsapp_phone_number_id: phoneId,
+        whatsapp_business_account_id: wabaId,
+      })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById('wa_access_token').value = '';
+      await loadProfile();
+      alert('WhatsApp connected.');
+    } else {
+      alert(data.message || 'Could not save.');
+    }
+  } catch (e) {
+    alert('Network error, please try again.');
+  }
+  btn.disabled = false; btn.textContent = 'Save WhatsApp Details';
 }
 
 async function connectWhatsApp() {
