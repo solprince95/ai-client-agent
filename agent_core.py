@@ -13,6 +13,8 @@ from email import encoders
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 
+import research_agent
+
 BASE     = os.path.dirname(os.path.abspath(__file__))
 SENT_CSV = os.path.join(BASE, "sent_log.csv")
 
@@ -513,11 +515,19 @@ def find_emails(businesses, log=_noop):
 # ======================================================
 #  STEP 4, Build the personalised email
 # ======================================================
-def build_email(biz, config):
+def build_email(biz, config, research=None):
     name    = biz["name"]
     website = biz.get("website") or ""
     domain  = urlparse(website).netloc.replace("www.", "") if website else ""
     site_line = f" ({domain})" if domain else ""
+
+    # If Research Agent has a profile for this lead, let Email Agent write
+    # a genuinely personalized message with it. Falls through to the
+    # template below if AI writing isn't configured or the call fails.
+    if research:
+        ai_result = research_agent.write_email(name, research, config)
+        if ai_result:
+            return ai_result
 
     subject = f"Quick offer for {name}: {config['YOUR_SERVICE']}"
 
@@ -538,9 +548,9 @@ If this sounds useful for {name}, I'd be happy to share more details, including 
 Best regards,
 
 {config['YOUR_NAME']}
-📧 {config['GMAIL_ADDRESS']}
+{config['GMAIL_ADDRESS']}
 
-───────────────────────────────────────────
+---
 Reply "Unsubscribe" if you'd prefer not to hear from me again.
 """
     return subject, body
@@ -825,7 +835,7 @@ def send_one(biz, config, log=_noop, user_id=None):
     if biz["email"] in load_sent(user_id=user_id):
         return False
 
-    subject, body = build_email(biz, config)
+    subject, body = build_email(biz, config, research=biz.get("research"))
     msg = MIMEMultipart()
     msg["From"]    = config["GMAIL_ADDRESS"]
     msg["To"]      = biz["email"]
@@ -897,7 +907,7 @@ def _is_fake_email(email):
     return False
 
 def send_all(businesses, config, log=_noop, user_id=None):
-    log("Sending personalised emails...")
+    log("Email Agent: writing and sending personalised emails...")
     sent = 0
     for i, biz in enumerate(businesses):
         if _is_fake_email(biz.get("email", "")):
@@ -918,7 +928,7 @@ def send_all(businesses, config, log=_noop, user_id=None):
             sent += 1
             if i < len(businesses) - 1:
                 time.sleep(config["DELAY_BETWEEN_EMAILS"])
-    log(f"{sent} new email(s) sent.")
+    log(f"Email Agent: done, {sent} new email(s) sent.")
     return sent
 
 
@@ -932,7 +942,7 @@ def check_replies(config, log=_noop, user_id=None):
     - Hard 25-second wall-clock cap via thread so gunicorn never times out
     - IMAP socket timeout of 10s per operation
     """
-    log("Checking your inbox for replies from contacted businesses...")
+    log("Reply Agent: checking your inbox for replies from contacted businesses...")
     replies = []
 
     contacted = load_sent(user_id=user_id)
@@ -1025,9 +1035,9 @@ def check_replies(config, log=_noop, user_id=None):
                     continue
 
             if found == 0:
-                log("📭 No replies from contacted businesses yet.")
+                log("Reply Agent: no replies from contacted businesses yet.")
             else:
-                log(f"📬 {found} reply(ies) from businesses you contacted!")
+                log(f"Reply Agent: found {found} reply(ies) from businesses you contacted.")
 
             try:
                 mail.logout()
@@ -1056,16 +1066,17 @@ def run_discovery(config, log=_noop, user_id=None):
     The user picks who to email afterwards, in the Leads tab.
     """
     if not run_diagnostics(config, log=log):
-        log("⛔ Setup incomplete. Fix the issues above in Setup, then run again.")
+        log("Setup incomplete. Fix the issues above in Setup, then run again.")
         return {"ok": False}
 
+    log("Discovery Agent: searching Google Maps for matching businesses...")
     biz   = search_businesses(config, log=log)
     sites = fetch_websites(biz, config, log=log)
     leads = find_emails(sites, log=log)
 
     upsert_leads(leads, config, log=log, user_id=user_id)
 
-    log(f"✅ Discovery complete, {len(leads)} lead(s) ready for review in the Leads tab.")
+    log(f"Discovery Agent: done, {len(leads)} lead(s) ready for review in the Leads tab.")
     return {"ok": True, "found": len(biz), "with_sites": len(sites),
             "with_emails": len(leads)}
 
@@ -1104,12 +1115,19 @@ def send_to_selected_leads(lead_ids, config, log=_noop, user_id=None):
             "email":         r.get("email", ""),
             "phone":         r.get("phone", ""),
             "business_type": r.get("business_type", ""),
+            "_row":          r,  # keep the full row around for Research Agent
         })
 
-    log(f"Sending personalised emails to {len(businesses)} selected lead(s)...")
+    if research_agent.research_configured():
+        log(f"Research Agent: learning about {len(businesses)} business(es)...")
+        for biz in businesses:
+            biz["research"] = research_agent.get_or_research(biz["_row"], config, user_id, supabase=sb)
+        log("Research Agent: done, handing off to Email Agent.")
+
+    log(f"Email Agent: sending to {len(businesses)} selected lead(s)...")
     sent = send_all(businesses, config, log=log, user_id=user_id)
 
-    log(f"✅ Send complete! Go to the Leads tab to see updated statuses.")
+    log("Email Agent: all done, check the Leads tab for updated statuses.")
     return {"ok": True, "sent": sent, "selected": len(lead_ids)}
 
 

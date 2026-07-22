@@ -173,6 +173,35 @@ def _handle_deactivated(payload: dict, supabase) -> dict:
     return {"ok": True, "message": f"Plan deactivated for user {user_id}."}
 
 
+def cancel_subscription(user_id: str, subscription_id: str, supabase) -> dict:
+    """
+    Cancels a user's subscription. Uses cancel_at_cycle_end so they keep
+    access through the period they already paid for, rather than losing
+    access immediately.
+    """
+    if not subscription_id:
+        return {"ok": False, "message": "No active subscription found for this account."}
+
+    client = _get_client()
+    if not client:
+        return {"ok": False, "message": "Billing isn't fully configured right now."}
+
+    try:
+        client.subscription.cancel(subscription_id, {"cancel_at_cycle_end": 1})
+    except Exception as e:
+        return {"ok": False, "message": f"Could not cancel: {e}"}
+
+    # Optimistic local flag so the UI can reflect "cancelling" immediately,
+    # even before Razorpay's subscription.cancelled webhook actually fires
+    # at the end of the billing cycle.
+    try:
+        supabase.table("profiles").update({"cancel_at_period_end": True}).eq("id", user_id).execute()
+    except Exception:
+        pass  # not critical, the webhook will still correctly deactivate later
+
+    return {"ok": True, "message": "Your subscription will not renew. You'll keep access until the end of this billing period."}
+
+
 # ======================================================
 #  RECEIPTS
 # ======================================================

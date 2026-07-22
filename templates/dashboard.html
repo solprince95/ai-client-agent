@@ -228,6 +228,17 @@ body {
   color: var(--t3);
   margin-bottom: 6px;
 }
+.active-agent-tag {
+  display: inline-block;
+  font-size: .68rem;
+  font-weight: 700;
+  color: var(--blue2);
+  background: rgba(29,106,255,.12);
+  border: 1px solid var(--bdr-b);
+  border-radius: 6px;
+  padding: 3px 9px;
+  margin-bottom: 8px;
+}
 .status-val {
   font-family: var(--dis);
   font-size: 1rem;
@@ -747,6 +758,7 @@ body {
           <div class="status-card">
             <div>
               <div class="status-label">Agent Status</div>
+              <div class="active-agent-tag" id="active-agent-tag" style="display:none;"></div>
               <div class="status-val" id="status-val">Loading...</div>
             </div>
             <div>
@@ -926,6 +938,10 @@ body {
             </div>
             <div class="billing-status" id="billing-status">Checking...</div>
             <div>Unlimited outreach. All features. No per-email charges.</div>
+            <div id="cancel-section" style="display:none; margin-top:14px;">
+              <button class="btn-danger" id="cancel-sub-btn" onclick="cancelSubscription()" type="button">Cancel Subscription</button>
+              <div id="cancel-message" style="margin-top:8px; font-size:.8rem;"></div>
+            </div>
           </div>
 
           <div id="pay-section" style="display:none;">
@@ -1012,14 +1028,41 @@ async function loadProfile() {
   // Billing tab
   const billSt = document.getElementById('billing-status');
   const payEl  = document.getElementById('pay-section');
+  const cancelSection = document.getElementById('cancel-section');
+  const cancelBtn = document.getElementById('cancel-sub-btn');
   if (p.is_paid) {
-    billSt.textContent = 'Active. Renews in 30 days'; billSt.className = 'billing-status active';
+    if (p.cancel_at_period_end) {
+      billSt.textContent = 'Active, will not renew'; billSt.className = 'billing-status trial';
+      cancelBtn.disabled = true; cancelBtn.textContent = 'Cancellation scheduled';
+    } else {
+      billSt.textContent = 'Active. Renews in 30 days'; billSt.className = 'billing-status active';
+      cancelBtn.disabled = false; cancelBtn.textContent = 'Cancel Subscription';
+    }
+    cancelSection.style.display = 'block';
   } else if (p.days_left > 0) {
     billSt.textContent = 'Free trial. ' + p.days_left + ' day' + (p.days_left === 1 ? '' : 's') + ' remaining';
     billSt.className = 'billing-status trial'; payEl.style.display = 'block';
   } else {
     billSt.textContent = 'Trial ended. Payment required'; billSt.className = 'billing-status ended';
     payEl.style.display = 'block';
+  }
+}
+
+async function cancelSubscription() {
+  if (!confirm('Cancel your subscription? You will keep access until the end of the current billing period, then it will not renew.')) return;
+  const btn = document.getElementById('cancel-sub-btn');
+  const msg = document.getElementById('cancel-message');
+  btn.disabled = true; btn.textContent = 'Cancelling...';
+  try {
+    const res  = await fetch('/api/billing/cancel-subscription', { method: 'POST' });
+    const data = await res.json();
+    msg.textContent = data.message || '';
+    msg.style.color = data.ok ? 'var(--green)' : 'var(--red)';
+    if (data.ok) { setTimeout(loadProfile, 1500); } else { btn.disabled = false; btn.textContent = 'Cancel Subscription'; }
+  } catch (e) {
+    msg.textContent = 'Network error, please try again.';
+    msg.style.color = 'var(--red)';
+    btn.disabled = false; btn.textContent = 'Cancel Subscription';
   }
 }
 
@@ -1365,7 +1408,8 @@ async function sendToSelected() {
     if (!data.ok) { alert(data.message || 'Could not start sending.'); btn.disabled=false; btn.textContent='Send Emails to Selected'; return; }
     selectedLeadIds.clear();
     switchTab('run');
-    _runMode = 'send';
+    setActiveAgent('Email Agent', 'Handing this off to Email Agent...');
+    _runMode = 'send_email';
     startPolling();
   } catch(e) { alert('Network error. Please try again.'); btn.disabled=false; btn.textContent='Send Emails to Selected'; }
 }
@@ -1382,7 +1426,8 @@ async function sendWhatsAppToSelected() {
     if (!data.ok) { alert(data.message || 'Could not start sending.'); btn.disabled=false; btn.textContent='Send WhatsApp message to Selected'; return; }
     selectedLeadIds.clear();
     switchTab('run');
-    _runMode = 'send';
+    setActiveAgent('WhatsApp Agent', 'Handing this off to WhatsApp Agent...');
+    _runMode = 'send_whatsapp';
     startPolling();
   } catch(e) { alert('Network error. Please try again.'); btn.disabled=false; btn.textContent='Send WhatsApp message to Selected'; }
 }
@@ -1432,11 +1477,20 @@ let _pollInterval = null;
 let _pollTimer    = null;
 let _runMode      = 'discover';
 
+function setActiveAgent(name, handoffLine) {
+  const tag = document.getElementById('active-agent-tag');
+  const logBox = document.getElementById('log-box');
+  tag.textContent = name;
+  tag.style.display = 'inline-block';
+  logBox.style.display = 'block';
+  logBox.textContent = handoffLine + '\n';
+}
+
 async function runAgent() {
   const btn    = document.getElementById('run-btn');
   const logBox = document.getElementById('log-box');
   btn.disabled = true; btn.textContent = 'Searching...';
-  logBox.style.display = 'block'; logBox.textContent = '';
+  setActiveAgent('Discovery Agent', 'Handing this off to Discovery Agent...');
   const res  = await fetch('/api/run', { method:'POST' });
   const data = await res.json();
   if (!data.ok) { logBox.textContent = data.message; btn.disabled=false; btn.textContent='Find Businesses'; return; }
@@ -1455,7 +1509,7 @@ async function checkReplies() {
   const btn    = document.getElementById('check-replies-btn');
   const logBox = document.getElementById('log-box');
   btn.disabled = true; btn.textContent = 'Checking...';
-  logBox.style.display = 'block'; logBox.textContent = '';
+  setActiveAgent('Reply Agent', 'Handing this off to Reply Agent...');
   try {
     const res  = await fetch('/api/check-replies', { method:'POST' });
     const data = await res.json();
@@ -1488,6 +1542,7 @@ function startPolling() {
       if (isDone) {
         clearInterval(_pollTimer); _pollTimer = null;
         btn.disabled = false; btn.textContent = 'Find Businesses';
+        document.getElementById('active-agent-tag').style.display = 'none';
         const repBtn = document.getElementById('check-replies-btn');
         if (repBtn) {
           repBtn.disabled = false;

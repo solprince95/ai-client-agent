@@ -18,6 +18,7 @@ from datetime import datetime
 import requests
 
 from agent_core import BASE, _get_supabase, _noop, mark_lead_contacted  # reuse existing infra
+import research_agent
 
 WHATSAPP_SENT_CSV = os.path.join(BASE, "whatsapp_sent_log.csv")
 
@@ -56,6 +57,13 @@ def _is_valid_phone(raw: str) -> bool:
 # ======================================================
 def build_whatsapp_freeform_message(biz: dict, config: dict) -> str:
     name = biz.get("name", "there")
+
+    research = biz.get("research")
+    if research:
+        ai_result = research_agent.write_whatsapp_message(name, research, config)
+        if ai_result:
+            return ai_result
+
     return (
         f"Hi {name} team! This is {config.get('YOUR_NAME','')}. "
         f"{config.get('YOUR_ABOUT','')}\n\n"
@@ -230,7 +238,7 @@ def send_whatsapp_one(biz: dict, config: dict, log=_noop, user_id=None, use_temp
 
 
 def send_whatsapp_all(businesses, config, log=_noop, user_id=None, use_template=True):
-    log("Sending WhatsApp messages...")
+    log("WhatsApp Agent: writing and sending your messages...")
     sent = 0
     delay = config.get("DELAY_BETWEEN_EMAILS", 30)  # reuse same throttle setting
     for i, biz in enumerate(businesses):
@@ -239,7 +247,7 @@ def send_whatsapp_all(businesses, config, log=_noop, user_id=None, use_template=
             sent += 1
             if i < len(businesses) - 1:
                 time.sleep(delay)
-    log(f"{sent} new WhatsApp message(s) sent.")
+    log(f"WhatsApp Agent: done, {sent} new message(s) sent.")
     return sent
 
 
@@ -276,16 +284,23 @@ def send_whatsapp_to_selected_leads(lead_ids, config, log=_noop, user_id=None, u
             "name":          r.get("business_name", ""),
             "phone":         phone,
             "business_type": r.get("business_type", ""),
+            "_row":          r,  # keep the full row around for Research Agent
         })
 
     if not businesses:
         log("None of the selected leads have a phone number on file.")
         return {"ok": True, "sent": 0, "selected": len(lead_ids)}
 
-    log(f"Sending WhatsApp messages to {len(businesses)} selected lead(s)...")
+    if research_agent.research_configured():
+        log(f"Research Agent: learning about {len(businesses)} business(es)...")
+        for biz in businesses:
+            biz["research"] = research_agent.get_or_research(biz["_row"], config, user_id, supabase=sb)
+        log("Research Agent: done, handing off to WhatsApp Agent.")
+
+    log(f"WhatsApp Agent: sending to {len(businesses)} selected lead(s)...")
     sent = send_whatsapp_all(businesses, config, log=log, user_id=user_id, use_template=use_template)
 
-    log("✅ WhatsApp send complete! Go to the Leads tab to see updated statuses.")
+    log("WhatsApp Agent: all done, check the Leads tab for updated statuses.")
     return {"ok": True, "sent": sent, "selected": len(lead_ids)}
 
 

@@ -739,6 +739,17 @@ def api_billing_create_subscription():
     return jsonify(result)
 
 
+@app.route("/api/billing/cancel-subscription", methods=["POST"])
+@login_required
+def api_billing_cancel_subscription():
+    uid = session["user_id"]
+    profile = _get_profile(uid)
+    subscription_id = profile.get("razorpay_subscription_id", "")
+
+    result = billing_agent.cancel_subscription(uid, subscription_id, supabase)
+    return jsonify(result)
+
+
 @app.route("/api/billing/history", methods=["GET"])
 @login_required
 def api_billing_history():
