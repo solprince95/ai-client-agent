@@ -1132,6 +1132,16 @@ function toggleWhatsAppManual() {
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
+async function refreshWhatsAppStatusOnly() {
+  const res  = await fetch('/api/profile');
+  const data = await res.json();
+  if (!data.ok) return;
+  window._myProfile = data.profile;
+  const waSt = document.getElementById('whatsapp-status');
+  waSt.textContent = data.profile.has_whatsapp ? '✅ Connected' : 'Not connected';
+  waSt.style.color = data.profile.has_whatsapp ? 'var(--green)' : 'var(--red)';
+}
+
 async function saveWhatsAppManual() {
   const btn = document.getElementById('save-whatsapp-manual-btn');
   const token   = document.getElementById('wa_access_token').value.trim();
@@ -1157,7 +1167,7 @@ async function saveWhatsAppManual() {
     const data = await res.json();
     if (data.ok) {
       document.getElementById('wa_access_token').value = '';
-      await loadProfile();
+      await refreshWhatsAppStatusOnly();
       alert('WhatsApp connected.');
     } else {
       alert(data.message || 'Could not save.');
@@ -1411,6 +1421,7 @@ function toggleExpand(id) {
 function openWhatsAppChat(phone, businessName) {
   let digits = (phone || '').replace(/[^\d+]/g, '').replace(/^\+/, '');
   if (!digits) { alert('No phone number on file for this lead.'); return; }
+  if (digits.length === 11 && digits[0] === '0') digits = digits.slice(1); // strip domestic trunk "0"
   if (digits.length === 10) digits = '91' + digits; // assume Indian mobile if no country code
 
   const p = window._myProfile || {};
@@ -1605,6 +1616,10 @@ function startPolling() {
           repBtn.textContent = _runMode === 'replies' ? 'Replies checked' : 'Check Replies';
           if (_runMode === 'replies') setTimeout(() => { repBtn.textContent = 'Check Replies'; }, 3000);
         }
+        const emailBtn = document.getElementById('send-selected-btn');
+        if (emailBtn) { emailBtn.disabled = (selectedLeadIds.size === 0); emailBtn.textContent = 'Send Emails to Selected'; }
+        const waBtn = document.getElementById('send-whatsapp-selected-btn');
+        if (waBtn) { waBtn.disabled = (selectedLeadIds.size === 0); waBtn.textContent = 'Send WhatsApp message to Selected'; }
         document.getElementById('reset-btn').style.display = 'none';
         _pollInterval = setInterval(loadStatus, 10000);
         loadStatus();

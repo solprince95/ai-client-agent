@@ -37,9 +37,24 @@ def whatsapp_configured(config: dict) -> bool:
 
 
 def _normalize_phone(raw: str) -> str:
-    """Strip spaces/dashes/parens; Graph API wants digits only (with country code, no '+')."""
+    """
+    Strip spaces/dashes/parens; Graph API wants digits only, with country
+    code, no '+'. Handles common Indian formatting quirks:
+      - a leading trunk '0' before a 10-digit number (e.g. "07940396208",
+        the domestic-dialing habit of writing 0 + STD code/mobile number)
+      - a bare 10-digit Indian mobile number with no country code at all
+    """
     digits = re.sub(r"[^\d+]", "", raw or "")
-    return digits.lstrip("+")
+    has_plus = digits.startswith("+")
+    digits = digits.lstrip("+")
+
+    if not has_plus:
+        if len(digits) == 11 and digits.startswith("0"):
+            digits = digits[1:]
+        if len(digits) == 10 and digits[0] in "6789":
+            digits = "91" + digits
+
+    return digits
 
 
 def _is_valid_phone(raw: str) -> bool:
