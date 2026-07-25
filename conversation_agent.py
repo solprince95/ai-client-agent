@@ -238,7 +238,7 @@ def handle_message(conversation_id: str, visitor_message: str, sb=None) -> dict:
             updates["question_index"] = new_index
             if new_index >= len(questions):
                 score = _score_lead(answers)
-                updates["stage"] = "done"
+                updates["stage"] = "booking"
                 updates["score"] = score
                 _log(conversation_id, conv["user_id"], "score_updated", score, sb)
 
@@ -246,6 +246,25 @@ def handle_message(conversation_id: str, visitor_message: str, sb=None) -> dict:
             sb.table("conversations").update(updates).eq("id", conversation_id).execute()
 
         reply = result.get("reply", "Could you tell me a bit more?")
+
+    elif stage == "booking":
+        result = _run_booking_turn(clinic, visitor_message)
+        if result.get("time_captured"):
+            try:
+                sb.table("appointments").insert({
+                    "conversation_id": conversation_id,
+                    "clinic_id": conv["clinic_id"],
+                    "user_id": conv["user_id"],
+                    "visitor_name": conv.get("visitor_name", ""),
+                    "visitor_contact": conv.get("visitor_contact", ""),
+                    "requested_text": result.get("requested_text", visitor_message),
+                }).execute()
+                _log(conversation_id, conv["user_id"], "booked", result.get("requested_text", ""), sb)
+            except Exception:
+                pass
+            sb.table("conversations").update({"stage": "done", "status": "booked"}).eq("id", conversation_id).execute()
+        reply = result.get("reply", "What date or time works best for you?")
+
     else:
         reply = _run_faq_turn(clinic, visitor_message)
 
@@ -293,6 +312,33 @@ def _run_qualification_turn(clinic: dict, current_question: str, visitor_message
         return _parse_json_block(raw)
     except Exception:
         return {"answered": False, "extracted_answer": "", "reply": "Sorry, could you say that again?"}
+
+
+def _run_booking_turn(clinic: dict, visitor_message: str) -> dict:
+    """
+    Booking Agent's turn: capture a requested date/time for the visit.
+    Doesn't touch a real calendar yet (that's Phase 2b), just captures
+    what the visitor wants so staff can confirm it. Deliberately simple:
+    accepts loose answers like "Tuesday afternoon" rather than forcing
+    an exact date, that's a staff-confirmation problem, not a bot one.
+    """
+    system_prompt = (
+        "You are Booking Agent for a clinic's website chat. The visitor has been qualified "
+        "and now needs to say what date/time they'd like to come in. If their message gives "
+        "any indication of a preferred date or time (even loose, like 'Tuesday afternoon' or "
+        "'as soon as possible'), treat it as captured and confirm it back warmly, letting them "
+        "know the clinic will confirm the exact slot. If they haven't given a date/time yet, "
+        "ask for one naturally. No exclamation marks, no markdown, no emoji, under 40 words. "
+        "Respond with ONLY a JSON object: "
+        '{"time_captured": true or false, "requested_text": "what they said about timing, if captured", '
+        '"reply": "your natural reply to send the visitor"}'
+    )
+    user_prompt = f"Clinic info:\n{_clinic_context(clinic)}\n\nVisitor said: {visitor_message}"
+    try:
+        raw = _call_claude(system_prompt, user_prompt, max_tokens=200)
+        return _parse_json_block(raw)
+    except Exception:
+        return {"time_captured": False, "requested_text": "", "reply": "What date or time works best for you? We'll confirm shortly."}
 
 
 def _run_faq_turn(clinic: dict, visitor_message: str) -> str:

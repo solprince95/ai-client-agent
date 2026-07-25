@@ -875,6 +875,40 @@ def api_conversation_resume(conversation_id):
 # ======================================================
 #  WIDGET (public, embedded on a clinic's own website, no login)
 # ======================================================
+@app.route("/chat/<clinic_id>")
+def hosted_chat_page(clinic_id):
+    try:
+        clinic_res = supabase.table("clinics").select("clinic_name").eq("id", clinic_id).single().execute()
+        clinic = clinic_res.data
+    except Exception:
+        clinic = None
+    if not clinic:
+        return render_template("hosted_chat.html", clinic_id=clinic_id, clinic_name="this clinic", not_found=True)
+    return render_template("hosted_chat.html", clinic_id=clinic_id, clinic_name=clinic.get("clinic_name") or "this clinic", not_found=False)
+
+
+@app.route("/api/conversations/<conversation_id>/appointment", methods=["GET"])
+@login_required
+def api_conversation_appointment(conversation_id):
+    uid = session["user_id"]
+    try:
+        res = supabase.table("appointments").select("*").eq("conversation_id", conversation_id).eq("user_id", uid).execute()
+        return jsonify({"ok": True, "appointment": (res.data or [None])[0]})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+
+
+@app.route("/api/appointments/<appointment_id>/confirm", methods=["POST"])
+@login_required
+def api_confirm_appointment(appointment_id):
+    uid = session["user_id"]
+    try:
+        supabase.table("appointments").update({"status": "confirmed"}).eq("id", appointment_id).eq("user_id", uid).execute()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+
+
 @app.route("/api/widget/start", methods=["POST"])
 def api_widget_start():
     data = request.get_json(silent=True) or {}

@@ -779,6 +779,7 @@ body {
                 <button class="btn-secondary" id="resume-btn" onclick="resumeConversation()" style="display:none;">Resume Bot</button>
               </div>
             </div>
+            <div id="conv-appointment" style="display:none;background:var(--s2);border:1px solid var(--bdr-b);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:.82rem;"></div>
             <div id="conv-messages" style="flex:1;overflow-y:auto;background:var(--s2);border-radius:10px;padding:12px;margin-bottom:10px;"></div>
             <div id="conv-reply-row" style="display:none;gap:8px;">
               <input type="text" class="field-inp" id="conv-reply-input" placeholder="Type a reply as staff..." style="flex:1;"/>
@@ -846,6 +847,10 @@ body {
         <div class="card-title">Add Chat to Your Website</div>
         <div class="card-sub">Paste this right before the closing &lt;/body&gt; tag on your clinic's website.</div>
         <div class="upi-box" id="widget-embed-code" style="user-select:all;"></div>
+
+        <div class="card-title" style="margin-top:20px;">No Website? Share This Link Instead</div>
+        <div class="card-sub">A ready-made chat page on our domain, share it directly with patients (WhatsApp bio link, Instagram, Google Business Profile, etc).</div>
+        <div class="upi-box" id="widget-hosted-link" style="user-select:all;"></div>
       </div>
     </div>
 
@@ -1467,7 +1472,24 @@ async function selectConversation(id) {
     }).join('');
     msgEl.scrollTop = msgEl.scrollHeight;
   }
+
+  const apptEl = document.getElementById('conv-appointment');
+  const apptRes  = await fetch(`/api/conversations/${id}/appointment`);
+  const apptData = await apptRes.json();
+  if (apptData.ok && apptData.appointment) {
+    const a = apptData.appointment;
+    apptEl.style.display = 'block';
+    apptEl.innerHTML = `<strong>Booking requested:</strong> ${a.requested_text || '(no detail captured)'}
+      &nbsp;·&nbsp; Status: ${a.status}
+      ${a.status === 'requested' ? `&nbsp;·&nbsp;<button class="btn-secondary" style="padding:2px 8px;font-size:.72rem;" onclick="confirmAppointment('${a.id}')">Mark Confirmed</button>` : ''}`;
+  } else {
+    apptEl.style.display = 'none';
+  }
 }
+
+async function confirmAppointment(appointmentId) {
+  await fetch(`/api/appointments/${appointmentId}/confirm`, { method: 'POST' });
+  selectConversation(_currentConversationId);
 
 async function takeoverConversation() {
   if (!_currentConversationId) return;
@@ -1517,6 +1539,8 @@ async function loadClinic() {
     document.getElementById('widget-embed-card').style.display = 'block';
     document.getElementById('widget-embed-code').textContent =
       `<script src="https://vajralabs.co.in/static/chat-widget.js" data-clinic-id="${c.id}"><\/script>`;
+    document.getElementById('widget-hosted-link').textContent =
+      `https://vajralabs.co.in/chat/${c.id}`;
   }
 }
 
