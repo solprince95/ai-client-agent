@@ -718,7 +718,13 @@ body {
     </div>
 
     <div class="sb-nav">
-      <button class="sb-link active" onclick="switchTab('run')">
+      <button class="sb-link active" onclick="switchTab('conversations')">
+        <span class="sb-link-dot"></span> Conversations
+      </button>
+      <button class="sb-link" onclick="switchTab('clinic')">
+        <span class="sb-link-dot"></span> Clinic Setup
+      </button>
+      <button class="sb-link" onclick="switchTab('run')">
         <span class="sb-link-dot"></span> Run Agent
       </button>
       <button class="sb-link" onclick="switchTab('leads')">
@@ -736,6 +742,9 @@ body {
     </div>
 
     <div class="sb-footer">
+      <div style="padding:8px 12px;font-size:.68rem;color:var(--t3);border-top:1px solid var(--bdr);margin-top:4px;">
+        Run Agent, Leads, and Setup are the old outbound outreach tools, kept for now, being phased out in favor of Conversations and Clinic Setup.
+      </div>
       <div class="sb-badge">
         <div class="sb-badge-label">Plan Status</div>
         <div class="sb-badge-val" id="plan-badge">Loading...</div>
@@ -747,8 +756,100 @@ body {
   <!-- MAIN -->
   <main class="main">
 
-    <!-- RUN AGENT -->
-    <div class="tab-panel active" id="tab-run">
+    <!-- CONVERSATIONS -->
+    <div class="tab-panel active" id="tab-conversations">
+      <div class="page-head">
+        <h1>Conversations</h1>
+        <p>Website visitors chatting with your Reply/Qualify Agent right now.</p>
+      </div>
+      <div style="display:flex;gap:16px;align-items:flex-start;">
+        <div class="card" style="width:280px;flex-shrink:0;max-height:70vh;overflow-y:auto;padding:8px;">
+          <div id="conversations-list"><div class="hint-text">Loading...</div></div>
+        </div>
+        <div class="card" style="flex:1;min-height:400px;display:flex;flex-direction:column;">
+          <div id="conversation-empty" class="hint-text">Select a conversation on the left.</div>
+          <div id="conversation-view" style="display:none;flex-direction:column;height:100%;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <div>
+                <div id="conv-visitor" style="font-weight:700;"></div>
+                <div id="conv-score" class="hint-text"></div>
+              </div>
+              <div>
+                <button class="btn-secondary" id="takeover-btn" onclick="takeoverConversation()">Take Over</button>
+                <button class="btn-secondary" id="resume-btn" onclick="resumeConversation()" style="display:none;">Resume Bot</button>
+              </div>
+            </div>
+            <div id="conv-messages" style="flex:1;overflow-y:auto;background:var(--s2);border-radius:10px;padding:12px;margin-bottom:10px;"></div>
+            <div id="conv-reply-row" style="display:none;gap:8px;">
+              <input type="text" class="field-inp" id="conv-reply-input" placeholder="Type a reply as staff..." style="flex:1;"/>
+              <button class="save-btn" onclick="sendStaffReply()">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CLINIC SETUP -->
+    <div class="tab-panel" id="tab-clinic">
+      <div class="page-head">
+        <h1>Clinic Setup</h1>
+        <p>This is what Reply Agent and Qualify Agent know about your clinic.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Clinic Profile</div>
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="field-label">Clinic Name</label>
+            <input type="text" class="field-inp" id="clinic_name" placeholder="e.g. Smile Care Dental"/>
+          </div>
+          <div class="form-field">
+            <label class="field-label">Clinic Type</label>
+            <input type="text" class="field-inp" id="clinic_type" placeholder="e.g. Dental"/>
+          </div>
+          <div class="form-field">
+            <label class="field-label">Hours</label>
+            <input type="text" class="field-inp" id="clinic_hours" placeholder="e.g. Mon-Sat 10am-7pm"/>
+          </div>
+          <div class="form-field">
+            <label class="field-label">Location</label>
+            <input type="text" class="field-inp" id="clinic_location" placeholder="e.g. Nikol, Ahmedabad"/>
+          </div>
+          <div class="form-field full">
+            <label class="field-label">Services</label>
+            <textarea class="field-ta" id="clinic_services" placeholder="List your services, one idea per line..."></textarea>
+          </div>
+          <div class="form-field full">
+            <label class="field-label">Pricing Notes</label>
+            <textarea class="field-ta" id="clinic_pricing" placeholder="Rough pricing or how pricing works, kept general is fine..."></textarea>
+          </div>
+          <div class="form-field full">
+            <label class="field-label">FAQs</label>
+            <textarea class="field-ta" id="clinic_faqs" placeholder="Common questions and answers, one per line..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Qualification Questions</div>
+        <div class="card-sub">Asked one at a time, in order, before Reply Agent hands off to booking.</div>
+        <div id="qualification-questions-list"></div>
+        <button class="btn-secondary" onclick="addQuestionField()" type="button" style="margin-top:8px;">Add Question</button>
+      </div>
+
+      <div class="card">
+        <button class="save-btn" onclick="saveClinic()">Save Clinic Profile</button>
+        <div id="clinic-save-message" style="margin-top:10px;font-size:.82rem;"></div>
+      </div>
+
+      <div class="card" id="widget-embed-card" style="display:none;">
+        <div class="card-title">Add Chat to Your Website</div>
+        <div class="card-sub">Paste this right before the closing &lt;/body&gt; tag on your clinic's website.</div>
+        <div class="upi-box" id="widget-embed-code" style="user-select:all;"></div>
+      </div>
+    </div>
+
+
       <div class="page-head">
         <h1>Run Agent</h1>
         <p>Find businesses and send personalised outreach automatically.</p>
@@ -1000,12 +1101,14 @@ body {
 <script>
 /* ── Tab switching ───────────────────────────────────── */
 function switchTab(tab) {
-  const tabs = ['run','leads','setup','sent','billing'];
+  const tabs = ['conversations','clinic','run','leads','setup','sent','billing'];
   document.querySelectorAll('.sb-link').forEach((el, i) => el.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   if (tab === 'sent')  loadSentEmails();
   if (tab === 'leads') loadLeads();
+  if (tab === 'conversations') loadConversations();
+  if (tab === 'clinic') loadClinic();
 }
 
 /* ── Profile ─────────────────────────────────────────── */
@@ -1307,6 +1410,169 @@ function toggleSelectAll(el) {
     else selectedLeadIds.delete(cb.dataset.leadId);
   });
   updateSelectedCount();
+}
+
+/* ── Conversations ───────────────────────────────────── */
+let _currentConversationId = null;
+
+async function loadConversations() {
+  const listEl = document.getElementById('conversations-list');
+  try {
+    const res  = await fetch('/api/conversations');
+    const data = await res.json();
+    if (!data.ok || !data.conversations.length) {
+      listEl.innerHTML = '<div class="hint-text" style="padding:10px;">No conversations yet. Add the chat widget to your website to start receiving them.</div>';
+      return;
+    }
+    listEl.innerHTML = data.conversations.map(c => {
+      const label = c.visitor_name || c.visitor_contact || 'Website visitor';
+      const scoreColor = c.score === 'hot' ? 'var(--red)' : c.score === 'warm' ? 'var(--blue2)' : 'var(--t3)';
+      return `<div class="lead-row" style="cursor:pointer;padding:10px;border-radius:8px;margin-bottom:4px;" onclick="selectConversation('${c.id}')">
+        <div style="font-weight:600;font-size:.85rem;">${label}</div>
+        <div style="font-size:.72rem;color:${scoreColor};text-transform:uppercase;">${c.score || c.status}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    listEl.innerHTML = '<div class="hint-text">Could not load conversations.</div>';
+  }
+}
+
+async function selectConversation(id) {
+  _currentConversationId = id;
+  document.getElementById('conversation-empty').style.display = 'none';
+  document.getElementById('conversation-view').style.display = 'flex';
+
+  const res  = await fetch(`/api/conversations`);
+  const data = await res.json();
+  const conv = (data.conversations || []).find(c => c.id === id);
+  if (conv) {
+    document.getElementById('conv-visitor').textContent = conv.visitor_name || conv.visitor_contact || 'Website visitor';
+    document.getElementById('conv-score').textContent = 'Score: ' + (conv.score || 'not scored yet') + ' · Status: ' + conv.status;
+    const inTakeover = conv.status === 'human_takeover';
+    document.getElementById('takeover-btn').style.display = inTakeover ? 'none' : 'inline-block';
+    document.getElementById('resume-btn').style.display = inTakeover ? 'inline-block' : 'none';
+    document.getElementById('conv-reply-row').style.display = inTakeover ? 'flex' : 'none';
+  }
+
+  const msgRes  = await fetch(`/api/conversations/${id}/messages`);
+  const msgData = await msgRes.json();
+  const msgEl = document.getElementById('conv-messages');
+  if (msgData.ok) {
+    msgEl.innerHTML = msgData.messages.map(m => {
+      const align = m.role === 'visitor' ? 'flex-start' : 'flex-end';
+      const bg    = m.role === 'visitor' ? 'var(--s3)' : (m.role === 'staff' ? 'var(--green)' : 'var(--blue)');
+      return `<div style="display:flex;justify-content:${align};margin-bottom:8px;">
+        <div style="max-width:75%;background:${bg};color:#fff;padding:8px 12px;border-radius:10px;font-size:.82rem;">${m.content}</div>
+      </div>`;
+    }).join('');
+    msgEl.scrollTop = msgEl.scrollHeight;
+  }
+}
+
+async function takeoverConversation() {
+  if (!_currentConversationId) return;
+  await fetch(`/api/conversations/${_currentConversationId}/takeover`, { method: 'POST' });
+  selectConversation(_currentConversationId);
+}
+
+async function resumeConversation() {
+  if (!_currentConversationId) return;
+  await fetch(`/api/conversations/${_currentConversationId}/resume`, { method: 'POST' });
+  selectConversation(_currentConversationId);
+}
+
+async function sendStaffReply() {
+  const input = document.getElementById('conv-reply-input');
+  const message = input.value.trim();
+  if (!message || !_currentConversationId) return;
+  input.value = '';
+  await fetch(`/api/conversations/${_currentConversationId}/reply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message })
+  });
+  selectConversation(_currentConversationId);
+}
+
+/* ── Clinic Setup ────────────────────────────────────── */
+async function loadClinic() {
+  const res  = await fetch('/api/clinic');
+  const data = await res.json();
+  if (!data.ok) return;
+  const c = data.clinic || {};
+  document.getElementById('clinic_name').value     = c.clinic_name || '';
+  document.getElementById('clinic_type').value     = c.clinic_type || '';
+  document.getElementById('clinic_hours').value    = c.hours || '';
+  document.getElementById('clinic_location').value = c.location || '';
+  document.getElementById('clinic_services').value = c.services || '';
+  document.getElementById('clinic_pricing').value  = c.pricing_notes || '';
+  document.getElementById('clinic_faqs').value     = c.faqs || '';
+
+  const questions = (c.qualification_questions && c.qualification_questions.length)
+    ? c.qualification_questions
+    : ['What are you looking to get help with today?', 'Is this your first visit, or have you visited before?', 'Do you have a preferred date or time, or is it urgent?'];
+  renderQuestionFields(questions);
+
+  if (c.id) {
+    document.getElementById('widget-embed-card').style.display = 'block';
+    document.getElementById('widget-embed-code').textContent =
+      `<script src="https://vajralabs.co.in/static/chat-widget.js" data-clinic-id="${c.id}"><\/script>`;
+  }
+}
+
+function renderQuestionFields(questions) {
+  const el = document.getElementById('qualification-questions-list');
+  el.innerHTML = questions.map((q, i) => `
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <input type="text" class="field-inp qualification-q" value="${q.replace(/"/g, '&quot;')}" style="flex:1;"/>
+      <button class="btn-danger" type="button" onclick="this.parentElement.remove()">Remove</button>
+    </div>
+  `).join('');
+}
+
+function addQuestionField() {
+  const el = document.getElementById('qualification-questions-list');
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;';
+  div.innerHTML = `
+    <input type="text" class="field-inp qualification-q" placeholder="New question..." style="flex:1;"/>
+    <button class="btn-danger" type="button" onclick="this.parentElement.remove()">Remove</button>
+  `;
+  el.appendChild(div);
+}
+
+async function saveClinic() {
+  const questions = Array.from(document.querySelectorAll('.qualification-q')).map(el => el.value.trim()).filter(Boolean);
+  const msg = document.getElementById('clinic-save-message');
+  msg.textContent = 'Saving...';
+  try {
+    const res = await fetch('/api/clinic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clinic_name: document.getElementById('clinic_name').value.trim(),
+        clinic_type: document.getElementById('clinic_type').value.trim(),
+        hours: document.getElementById('clinic_hours').value.trim(),
+        location: document.getElementById('clinic_location').value.trim(),
+        services: document.getElementById('clinic_services').value.trim(),
+        pricing_notes: document.getElementById('clinic_pricing').value.trim(),
+        faqs: document.getElementById('clinic_faqs').value.trim(),
+        qualification_questions: questions,
+      })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      msg.textContent = 'Saved.';
+      msg.style.color = 'var(--green)';
+      loadClinic();
+    } else {
+      msg.textContent = data.message || 'Could not save.';
+      msg.style.color = 'var(--red)';
+    }
+  } catch (e) {
+    msg.textContent = 'Network error, please try again.';
+    msg.style.color = 'var(--red)';
+  }
 }
 
 async function loadLeads() {
@@ -1638,6 +1904,7 @@ async function logout() { await fetch('/api/auth/logout', { method:'POST' }); wi
 /* ── Init ────────────────────────────────────────────── */
 loadProfile();
 loadStatus();
+loadConversations();
 setInterval(loadStatus, 10000);
 </script>
 </body>

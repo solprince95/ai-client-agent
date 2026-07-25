@@ -32,6 +32,7 @@ from supabase import create_client, Client
 import agent_core
 import whatsapp_agent
 import billing_agent
+import conversation_agent
 from paths import get_resource_dir
 
 # ======================================================
@@ -75,12 +76,23 @@ def _check_maintenance_mode():
         return None
     if request.path == "/api/webhooks/razorpay":
         return None  # Razorpay must always be able to reach this, maintenance or not
+    if request.path.startswith("/api/widget/"):
+        return None  # a clinic's own website visitors shouldn't be blocked by our maintenance mode
     if session.get("maintenance_bypass") is True:
         return None
     if MAINTENANCE_BYPASS_KEY and request.args.get("bypass") == MAINTENANCE_BYPASS_KEY:
         session["maintenance_bypass"] = True
         return None
     return render_template("maintenance.html"), 503
+
+
+@app.after_request
+def _add_widget_cors_headers(response):
+    if request.path.startswith("/api/widget/"):
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
 
 
 # In-memory per-user run state (log queue, running flag).
@@ -778,6 +790,136 @@ def api_webhook_razorpay():
     # even if result reports an internal issue, so Razorpay doesn't retry
     # a webhook we've already handled/logged.
     return jsonify(result), 200
+
+
+# ======================================================
+#  CLINIC PROFILE (Qualify Agent's knowledge base)
+# ======================================================
+@app.route("/api/clinic", methods=["GET"])
+@login_required
+def api_get_clinic():
+    uid = session["user_id"]
+    clinic = conversation_agent.get_clinic(uid, sb=supabase)
+    return jsonify({"ok": True, "clinic": clinic})
+
+
+@app.route("/api/clinic", methods=["POST"])
+@login_required
+def api_save_clinic():
+    uid = session["user_id"]
+    data = request.get_json(silent=True) or {}
+    allowed = ["clinic_name", "clinic_type", "hours", "location", "services", "pricing_notes", "faqs"]
+    fields = {k: data.get(k, "") for k in allowed if k in data}
+
+    if "qualification_questions" in data:
+        qs = data.get("qualification_questions")
+        if isinstance(qs, list):
+            fields["qualification_questions"] = [str(q).strip() for q in qs if str(q).strip()]
+
+    result = conversation_agent.save_clinic(uid, fields, sb=supabase)
+    return jsonify(result)
+
+
+# ======================================================
+#  CONVERSATIONS (dashboard side, "who's chatting right now")
+# ======================================================
+@app.route("/api/conversations", methods=["GET"])
+@login_required
+def api_list_conversations():
+    uid = session["user_id"]
+    try:
+        res = supabase.table("conversations").select("*").eq("user_id", uid).order("updated_at", desc=True).execute()
+        return jsonify({"ok": True, "conversations": res.data or []})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+
+
+@app.route("/api/conversations/<conversation_id>/messages", methods=["GET"])
+@login_required
+def api_conversation_messages(conversation_id):
+    uid = session["user_id"]
+    try:
+        conv = supabase.table("conversations").select("id").eq("id", conversation_id).eq("user_id", uid).single().execute()
+        if not conv.data:
+            return jsonify({"ok": False, "message": "Not found."})
+        res = supabase.table("messages").select("*").eq("conversation_id", conversation_id).order("created_at").execute()
+        return jsonify({"ok": True, "messages": res.data or []})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+
+
+@app.route("/api/conversations/<conversation_id>/takeover", methods=["POST"])
+@login_required
+def api_conversation_takeover(conversation_id):
+    uid = session["user_id"]
+    return jsonify(conversation_agent.staff_takeover(conversation_id, uid, sb=supabase))
+
+
+@app.route("/api/conversations/<conversation_id>/reply", methods=["POST"])
+@login_required
+def api_conversation_staff_reply(conversation_id):
+    uid = session["user_id"]
+    message = (request.get_json(silent=True) or {}).get("message", "").strip()
+    if not message:
+        return jsonify({"ok": False, "message": "Message can't be empty."})
+    return jsonify(conversation_agent.staff_reply(conversation_id, uid, message, sb=supabase))
+
+
+@app.route("/api/conversations/<conversation_id>/resume", methods=["POST"])
+@login_required
+def api_conversation_resume(conversation_id):
+    uid = session["user_id"]
+    return jsonify(conversation_agent.resume_bot(conversation_id, uid, sb=supabase))
+
+
+# ======================================================
+#  WIDGET (public, embedded on a clinic's own website, no login)
+# ======================================================
+@app.route("/api/widget/start", methods=["POST"])
+def api_widget_start():
+    data = request.get_json(silent=True) or {}
+    clinic_id = data.get("clinic_id", "")
+    if not clinic_id:
+        return jsonify({"ok": False, "message": "Missing clinic_id."})
+    try:
+        clinic_res = supabase.table("clinics").select("*").eq("id", clinic_id).single().execute()
+        clinic = clinic_res.data
+    except Exception:
+        clinic = None
+    if not clinic:
+        return jsonify({"ok": False, "message": "Chat is not available."})
+
+    result = conversation_agent.start_conversation(clinic_id, clinic["user_id"], sb=supabase)
+    if not result.get("ok"):
+        return jsonify(result)
+
+    greeting = f"Hi! Welcome to {clinic.get('clinic_name') or 'our clinic'}. How can we help you today?"
+    return jsonify({
+        "ok": True,
+        "conversation_id": result["conversation_id"],
+        "clinic_name": clinic.get("clinic_name", ""),
+        "greeting": greeting,
+    })
+
+
+@app.route("/api/widget/consent", methods=["POST"])
+def api_widget_consent():
+    data = request.get_json(silent=True) or {}
+    conversation_id = data.get("conversation_id", "")
+    if not conversation_id:
+        return jsonify({"ok": False, "message": "Missing conversation_id."})
+    return jsonify(conversation_agent.give_consent(conversation_id, sb=supabase))
+
+
+@app.route("/api/widget/message", methods=["POST"])
+def api_widget_message():
+    data = request.get_json(silent=True) or {}
+    conversation_id = data.get("conversation_id", "")
+    message = (data.get("message") or "").strip()
+    if not conversation_id or not message:
+        return jsonify({"ok": False, "reply": "Something went wrong, please refresh and try again."})
+    result = conversation_agent.handle_message(conversation_id, message, sb=supabase)
+    return jsonify(result)
 
 
 # ======================================================
