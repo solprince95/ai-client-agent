@@ -33,6 +33,7 @@ import agent_core
 import whatsapp_agent
 import billing_agent
 import conversation_agent
+import followup_agent
 from paths import get_resource_dir
 
 # ======================================================
@@ -49,6 +50,30 @@ app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-change-me")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
+
+# ======================================================
+#  FOLLOW-UP AGENT SCHEDULER
+#  Runs hourly in the background, checks for conversations that went
+#  quiet before booking, sends the next follow-up in the sequence
+#  (24h / 2d / 4d / 1wk). Only starts if Supabase is actually
+#  configured, so local dev without env vars doesn't error out.
+# ======================================================
+if supabase is not None:
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+
+        def _run_followup_job():
+            try:
+                result = followup_agent.run_followup_check(sb=supabase, log=print)
+                print(f"Follow-up Agent: {result}")
+            except Exception as e:
+                print(f"Follow-up Agent scheduler error: {e}")
+
+        _scheduler = BackgroundScheduler(daemon=True)
+        _scheduler.add_job(_run_followup_job, "interval", hours=1, id="followup_check")
+        _scheduler.start()
+    except Exception as e:
+        print(f"Could not start Follow-up Agent scheduler: {e}")
 
 # Your Google Maps API key, set this as an environment variable on
 # Render (Settings → Environment), never hardcode it here.

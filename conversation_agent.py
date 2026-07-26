@@ -238,7 +238,7 @@ def handle_message(conversation_id: str, visitor_message: str, sb=None) -> dict:
             updates["question_index"] = new_index
             if new_index >= len(questions):
                 score = _score_lead(answers)
-                updates["stage"] = "booking"
+                updates["stage"] = "contact_capture"
                 updates["score"] = score
                 _log(conversation_id, conv["user_id"], "score_updated", score, sb)
 
@@ -246,6 +246,15 @@ def handle_message(conversation_id: str, visitor_message: str, sb=None) -> dict:
             sb.table("conversations").update(updates).eq("id", conversation_id).execute()
 
         reply = result.get("reply", "Could you tell me a bit more?")
+
+    elif stage == "contact_capture":
+        result = _run_contact_capture_turn(visitor_message)
+        if result.get("contact_captured"):
+            sb.table("conversations").update({
+                "stage": "booking",
+                "visitor_contact": result.get("contact", ""),
+            }).eq("id", conversation_id).execute()
+        reply = result.get("reply", "What's the best email or phone number to reach you at?")
 
     elif stage == "booking":
         result = _run_booking_turn(clinic, visitor_message)
@@ -312,6 +321,38 @@ def _run_qualification_turn(clinic: dict, current_question: str, visitor_message
         return _parse_json_block(raw)
     except Exception:
         return {"answered": False, "extracted_answer": "", "reply": "Sorry, could you say that again?"}
+
+
+def _run_contact_capture_turn(visitor_message: str) -> dict:
+    """
+    Captures an email or phone number so Follow-up Agent has somewhere
+    to reach the visitor later if they don't complete booking. Kept as
+    its own small, deterministic-ish step, simple pattern matching first,
+    Claude only as a fallback for oddly-phrased replies.
+    """
+    email_match = re.search(r"[\w.+-]+@[\w-]+\.[\w.-]+", visitor_message)
+    phone_match = re.search(r"(\+?\d[\d\s-]{7,14}\d)", visitor_message)
+    if email_match:
+        return {"contact_captured": True, "contact": email_match.group(0),
+                "reply": "Got it, thank you. What date or time works best for you?"}
+    if phone_match:
+        return {"contact_captured": True, "contact": phone_match.group(0),
+                "reply": "Got it, thank you. What date or time works best for you?"}
+
+    if not engine_configured():
+        return {"contact_captured": False, "reply": "Could you share an email or phone number to reach you at?"}
+
+    system_prompt = (
+        "The visitor was asked for their email or phone number. Check if their message "
+        "actually contains one (even informally written). No exclamation marks, no markdown. "
+        'Respond with ONLY a JSON object: {"contact_captured": true or false, "contact": "the '
+        'email or phone if found, else empty", "reply": "natural reply, re-asking if not found"}'
+    )
+    try:
+        raw = _call_claude(system_prompt, f"Visitor said: {visitor_message}", max_tokens=150)
+        return _parse_json_block(raw)
+    except Exception:
+        return {"contact_captured": False, "reply": "Could you share an email or phone number to reach you at?"}
 
 
 def _run_booking_turn(clinic: dict, visitor_message: str) -> dict:
