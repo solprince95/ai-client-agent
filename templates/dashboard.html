@@ -724,17 +724,8 @@ body {
       <button class="sb-link" onclick="switchTab('clinic')">
         <span class="sb-link-dot"></span> Clinic Setup
       </button>
-      <button class="sb-link" onclick="switchTab('run')">
-        <span class="sb-link-dot"></span> Run Agent
-      </button>
-      <button class="sb-link" onclick="switchTab('leads')">
-        <span class="sb-link-dot"></span> Leads
-      </button>
       <button class="sb-link" onclick="switchTab('setup')">
         <span class="sb-link-dot"></span> Setup
-      </button>
-      <button class="sb-link" onclick="switchTab('sent')">
-        <span class="sb-link-dot"></span> Sent Emails
       </button>
       <button class="sb-link" onclick="switchTab('billing')">
         <span class="sb-link-dot"></span> Billing
@@ -742,9 +733,6 @@ body {
     </div>
 
     <div class="sb-footer">
-      <div style="padding:8px 12px;font-size:.68rem;color:var(--t3);border-top:1px solid var(--bdr);margin-top:4px;">
-        Run Agent, Leads, and Setup are the old outbound outreach tools, kept for now, being phased out in favor of Conversations and Clinic Setup.
-      </div>
       <div class="sb-badge">
         <div class="sb-badge-label">Plan Status</div>
         <div class="sb-badge-val" id="plan-badge">Loading...</div>
@@ -853,97 +841,6 @@ body {
         <div class="upi-box" id="widget-hosted-link" style="user-select:all;"></div>
       </div>
     </div>
-
-
-      <div class="page-head">
-        <h1>Run Agent</h1>
-        <p>Find businesses and send personalised outreach automatically.</p>
-      </div>
-      <div class="panel-body">
-        <div class="run-grid">
-          <div class="status-card">
-            <div>
-              <div class="status-label">Agent Status</div>
-              <div class="active-agent-tag" id="active-agent-tag" style="display:none;"></div>
-              <div class="status-val" id="status-val">Loading...</div>
-            </div>
-            <div>
-              <button class="run-btn" id="run-btn" onclick="runAgent()" disabled>Find Businesses</button>
-              <div class="action-row">
-                <button class="btn-secondary" id="check-replies-btn" onclick="checkReplies()" disabled>Check Replies</button>
-                <button class="btn-danger" id="reset-btn" onclick="resetAgent()">Reset</button>
-              </div>
-              <div class="hint-text" id="run-hint">Complete your profile in Setup first.</div>
-            </div>
-          </div>
-          <div class="status-card">
-            <div class="status-label">How it works</div>
-            <div style="font-size:.78rem;color:var(--t2);line-height:1.75;margin-top:6px;">
-              <strong style="color:var(--t1);display:block;margin-bottom:4px;">Step 1: Find Businesses</strong>
-              Searches Google Maps, extracts emails and phone numbers, and saves them to your Leads tab.
-              <strong style="color:var(--t1);display:block;margin:10px 0 4px;">Step 2: Send Emails</strong>
-              Go to the Leads tab, select who to contact, and send personalised emails with one click.
-            </div>
-          </div>
-        </div>
-        <div id="log-box"></div>
-      </div>
-    </div>
-
-    <!-- LEADS -->
-    <div class="tab-panel" id="tab-leads">
-      <div class="page-head">
-        <h1>Leads</h1>
-        <p>Every business the agent has found. Select and send emails directly from here.</p>
-      </div>
-      <div class="panel-body">
-        <div class="stats-strip">
-          <div class="stat-tile">
-            <div class="stat-num" id="crm-total">0</div>
-            <div class="stat-lbl">Total</div>
-          </div>
-          <div class="stat-tile">
-            <div class="stat-num blue" id="crm-discovered">0</div>
-            <div class="stat-lbl">Discovered</div>
-          </div>
-          <div class="stat-tile">
-            <div class="stat-num amber" id="crm-contacted">0</div>
-            <div class="stat-lbl">Contacted</div>
-          </div>
-          <div class="stat-tile">
-            <div class="stat-num green" id="crm-replied">0</div>
-            <div class="stat-lbl">Replied</div>
-          </div>
-        </div>
-
-        <div class="crm-toolbar">
-          <input type="text" class="crm-search" id="crm-search" placeholder="Search name, email or address..." oninput="debouncedLoadLeads()"/>
-          <select class="crm-filter" id="crm-status-filter" onchange="loadLeads()">
-            <option value="">All statuses</option>
-            <option value="discovered">Discovered</option>
-            <option value="contacted">Contacted</option>
-            <option value="replied">Replied</option>
-            <option value="closed">Closed</option>
-            <option value="unsubscribed">Unsubscribed</option>
-          </select>
-        </div>
-
-        <div class="crm-select-bar">
-          <label class="crm-select-all">
-            <input type="checkbox" id="select-all-leads" onchange="toggleSelectAll(this)"/>
-            Select all
-          </label>
-          <span class="selected-count" id="selected-count">0 selected</span>
-          <button class="send-btn" id="send-selected-btn" onclick="sendToSelected()" disabled>Send Emails to Selected</button>
-          <button class="send-btn" id="send-whatsapp-selected-btn" onclick="sendWhatsAppToSelected()" disabled>Send WhatsApp message to Selected</button>
-        </div>
-
-        <div class="lead-list" id="lead-list">
-          <div class="loading-state">Loading...</div>
-        </div>
-      </div>
-    </div>
-
     <!-- SETUP -->
     <div class="tab-panel" id="tab-setup">
       <div class="page-head">
@@ -1030,19 +927,6 @@ body {
       </div>
     </div>
 
-    <!-- SENT EMAILS -->
-    <div class="tab-panel" id="tab-sent">
-      <div class="page-head">
-        <h1>Sent Emails</h1>
-        <p>All emails sent by the agent on your behalf.</p>
-      </div>
-      <div class="panel-body">
-        <div id="sent-list" class="sent-list">
-          <div class="loading-state">Loading...</div>
-        </div>
-      </div>
-    </div>
-
     <!-- BILLING -->
     <div class="tab-panel" id="tab-billing">
       <div class="page-head">
@@ -1106,12 +990,10 @@ body {
 <script>
 /* ── Tab switching ───────────────────────────────────── */
 function switchTab(tab) {
-  const tabs = ['conversations','clinic','run','leads','setup','sent','billing'];
+  const tabs = ['conversations','clinic','setup','billing'];
   document.querySelectorAll('.sb-link').forEach((el, i) => el.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
-  if (tab === 'sent')  loadSentEmails();
-  if (tab === 'leads') loadLeads();
   if (tab === 'conversations') loadConversations();
   if (tab === 'clinic') loadClinic();
 }
@@ -1343,80 +1225,6 @@ async function saveProfile() {
   }
 }
 
-/* ── Status ──────────────────────────────────────────── */
-async function loadStatus() {
-  const res  = await fetch('/api/status');
-  const data = await res.json();
-  if (!data.ok) return;
-  const runBtn   = document.getElementById('run-btn');
-  const hint     = document.getElementById('run-hint');
-  const statusEl = document.getElementById('status-val');
-  const resetBtn = document.getElementById('reset-btn');
-  const repBtn   = document.getElementById('check-replies-btn');
-
-  if (!data.profile_complete) {
-    statusEl.textContent = 'Profile incomplete';
-    statusEl.className = 'status-val warn';
-    runBtn.disabled = true; repBtn.disabled = true;
-    hint.textContent = 'Complete your profile in Setup first.';
-    resetBtn.style.display = 'none';
-  } else if (!data.is_paid && data.days_left <= 0) {
-    statusEl.textContent = 'Trial ended';
-    statusEl.className = 'status-val err';
-    runBtn.disabled = true; repBtn.disabled = true;
-    hint.textContent = 'Go to the Billing tab to activate your plan.';
-    resetBtn.style.display = 'none';
-  } else if (data.running) {
-    statusEl.textContent = 'Running...';
-    statusEl.className = 'status-val blue';
-    runBtn.disabled = true; repBtn.disabled = true;
-    hint.textContent = 'The agent is active. Results appear below.';
-    if (!_pollTimer) resetBtn.style.display = 'block';
-  } else {
-    statusEl.textContent = 'Ready';
-    statusEl.className = 'status-val good';
-    runBtn.disabled = false; repBtn.disabled = false;
-    runBtn.textContent = 'Find Businesses';
-    hint.textContent = data.days_left + ' trial day' + (data.days_left === 1 ? '' : 's') + ' remaining.';
-    resetBtn.style.display = 'none';
-  }
-}
-
-async function resetAgent() {
-  await fetch('/api/reset', { method: 'POST' });
-  document.getElementById('reset-btn').style.display = 'none';
-  document.getElementById('log-box').textContent = '';
-  loadStatus();
-}
-
-/* ── Leads / CRM ─────────────────────────────────────── */
-let _crmDebounce;
-let selectedLeadIds = new Set();
-
-function debouncedLoadLeads() { clearTimeout(_crmDebounce); _crmDebounce = setTimeout(loadLeads, 350); }
-function scoreClass(s) { return s >= 70 ? 'score-hi' : s >= 40 ? 'score-mid' : 'score-lo'; }
-
-function updateSelectedCount() {
-  const n = selectedLeadIds.size;
-  document.getElementById('selected-count').textContent = n + ' selected';
-  document.getElementById('send-selected-btn').disabled = (n === 0);
-  document.getElementById('send-whatsapp-selected-btn').disabled = (n === 0);
-}
-
-function toggleLeadSelected(id, checked) {
-  if (checked) selectedLeadIds.add(id); else selectedLeadIds.delete(id);
-  updateSelectedCount();
-}
-
-function toggleSelectAll(el) {
-  document.querySelectorAll('.lead-cb').forEach(cb => {
-    cb.checked = el.checked;
-    if (el.checked) selectedLeadIds.add(cb.dataset.leadId);
-    else selectedLeadIds.delete(cb.dataset.leadId);
-  });
-  updateSelectedCount();
-}
-
 /* ── Conversations ───────────────────────────────────── */
 let _currentConversationId = null;
 
@@ -1600,337 +1408,11 @@ async function saveClinic() {
   }
 }
 
-async function loadLeads() {
-  const container = document.getElementById('lead-list');
-  const search = document.getElementById('crm-search').value.trim();
-  const status = document.getElementById('crm-status-filter').value;
-  const params = new URLSearchParams();
-  if (search) params.set('q', search);
-  if (status) params.set('status', status);
-
-  try {
-    const res  = await fetch('/api/leads?' + params.toString());
-    const data = await res.json();
-    if (!data.ok) { container.innerHTML = '<div class="empty-state"><strong>Error</strong>Could not load leads.</div>'; return; }
-
-    const leads = data.leads || [];
-    document.getElementById('crm-total').textContent     = leads.length;
-    document.getElementById('crm-discovered').textContent = leads.filter(l => l.status === 'discovered').length;
-    document.getElementById('crm-contacted').textContent  = leads.filter(l => l.status === 'contacted').length;
-    document.getElementById('crm-replied').textContent    = leads.filter(l => l.status === 'replied').length;
-
-    const visibleIds = new Set(leads.map(l => l.id));
-    selectedLeadIds.forEach(id => { if (!visibleIds.has(id)) selectedLeadIds.delete(id); });
-
-    if (leads.length === 0) {
-      container.innerHTML = '<div class="empty-state"><strong>No leads yet</strong>Click Find Businesses on the Run Agent tab to start.</div>';
-      updateSelectedCount(); return;
-    }
-
-    container.innerHTML = leads.map(l => {
-      const safeEmail = (l.email || '').replace(/'/g, "\\'");
-      const safeName  = (l.business_name || '').replace(/'/g, "\\'");
-      const people = (() => { try { return JSON.parse(l.people_data || '[]'); } catch(e) { return []; } })();
-
-      return `<div class="lead-card" id="card-${l.id}">
-        <div class="lead-row" onclick="toggleExpand('${l.id}')">
-          <input type="checkbox" class="lead-cb" data-lead-id="${l.id}"
-            ${selectedLeadIds.has(l.id) ? 'checked' : ''}
-            ${l.status !== 'discovered' ? 'disabled' : ''}
-            onclick="event.stopPropagation()"
-            onchange="toggleLeadSelected('${l.id}', this.checked)"/>
-          <div class="lead-score-block">
-            <div class="lead-score-num ${scoreClass(l.match_score||0)}">${l.match_score||0}</div>
-            <div class="lead-score-lbl">Match</div>
-          </div>
-          <div class="lead-info">
-            <div class="lead-name">${l.business_name || 'Unknown'}</div>
-            <div class="lead-sub">${l.email || ''}${l.phone ? '  ' + l.phone : ''}${l.city ? '  ' + l.city : ''}</div>
-          </div>
-          <select class="lead-status-sel st-${l.status}"
-            onclick="event.stopPropagation()"
-            onchange="updateLeadField('${l.id}', 'status', this.value, this)">
-            <option value="discovered"   ${l.status==='discovered'?'selected':''}>Discovered</option>
-            <option value="contacted"    ${l.status==='contacted'?'selected':''}>Contacted</option>
-            <option value="replied"      ${l.status==='replied'?'selected':''}>Replied</option>
-            <option value="closed"       ${l.status==='closed'?'selected':''}>Closed</option>
-            <option value="unsubscribed" ${l.status==='unsubscribed'?'selected':''}>Unsubscribed</option>
-          </select>
-          <span class="lead-chevron">v</span>
-        </div>
-        <div class="lead-expand" id="expand-${l.id}">
-          <div class="expand-grid">
-            <div class="expand-item">
-              <div class="expand-lbl">Company Details</div>
-              <div class="expand-val">${l.business_name || 'N/A'}${l.address ? '<br><span style="font-weight:400;color:var(--t2);font-size:.72rem;">'+l.address+'</span>' : ''}${l.website ? '<br><a href="'+l.website+'" target="_blank">'+l.website+'</a>' : ''}</div>
-            </div>
-            <div class="expand-item">
-              <div class="expand-lbl">Company Email</div>
-              <div class="expand-val">${l.email ? '<a href="mailto:'+l.email+'">'+l.email+'</a> <button class="exp-btn exp-copy" onclick="event.stopPropagation();copyText(\''+safeEmail+'\')">Copy</button>' : 'Not found'}</div>
-            </div>
-            <div class="expand-item">
-              <div class="expand-lbl">Company Phone</div>
-              <div class="expand-val">${l.phone ? '<a href="tel:'+l.phone+'">'+l.phone+'</a> <button class="exp-btn exp-copy" onclick="event.stopPropagation();copyText(\''+l.phone+'\')">Copy</button>' : 'Not found'}</div>
-            </div>
-            <div class="expand-item expand-item-full">
-              <div class="expand-lbl">People</div>
-              <div class="expand-val">${
-                people.length ? people.map(p => `<div class="person-row">
-                  <span class="person-name">${p.name||''}</span>
-                  ${p.position ? '<span class="person-pos">'+p.position+'</span>' : ''}
-                  ${p.email ? '<a href="mailto:'+p.email+'" class="person-email">'+p.email+'</a>' : ''}
-                  ${p.phone ? '<a href="tel:'+p.phone+'" class="person-phone">'+p.phone+'</a>' : ''}
-                </div>`).join('') : 'No people data found'
-              }</div>
-            </div>
-          </div>
-          <div class="expand-actions">
-            <button class="exp-btn exp-meet" onclick="event.stopPropagation();startMeet('${safeEmail}','${safeName}')">Start Google Meet</button>
-            ${l.phone ? `<button class="exp-btn exp-whatsapp" onclick="event.stopPropagation();openWhatsAppChat('${l.phone}','${safeName}')">Send via WhatsApp</button>` : ''}
-            ${l.email ? `<button class="exp-btn exp-copy" onclick="event.stopPropagation();copyText('${safeEmail}')">Copy Email</button>` : ''}
-            ${l.phone ? `<button class="exp-btn exp-copy" onclick="event.stopPropagation();copyText('${l.phone}')">Copy Phone</button>` : ''}
-          </div>
-        </div>
-      </div>`;
-    }).join('');
-
-    updateSelectedCount();
-  } catch(err) {
-    container.innerHTML = '<div class="empty-state"><strong>Error</strong>Could not load leads. Please refresh.</div>';
-  }
-}
-
-function toggleExpand(id) {
-  const card   = document.getElementById('card-' + id);
-  const expand = document.getElementById('expand-' + id);
-  const isOpen = expand.classList.contains('open');
-  document.querySelectorAll('.lead-expand.open').forEach(el => el.classList.remove('open'));
-  document.querySelectorAll('.lead-card.expanded').forEach(el => el.classList.remove('expanded'));
-  if (!isOpen) { expand.classList.add('open'); card.classList.add('expanded'); }
-}
-
-function openWhatsAppChat(phone, businessName) {
-  let digits = (phone || '').replace(/[^\d+]/g, '').replace(/^\+/, '');
-  if (!digits) { alert('No phone number on file for this lead.'); return; }
-  if (digits.length === 11 && digits[0] === '0') digits = digits.slice(1); // strip domestic trunk "0"
-  if (digits.length === 10) digits = '91' + digits; // assume Indian mobile if no country code
-
-  const p = window._myProfile || {};
-  const myName    = p.full_name || '';
-  const myService = p.your_service || 'my services';
-  const greeting  = businessName ? 'Hi ' + businessName + ' team,' : 'Hi there,';
-
-  const message = greeting + ' this is ' + myName + '. I wanted to reach out about ' + myService + ', happy to share more if you\'re interested!';
-  const url = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(message);
-  window.open(url, '_blank');
-}
-
-function startMeet(email, name) {
-  window.open('https://meet.google.com/new', '_blank');
-  if (email) {
-    setTimeout(() => {
-      copyText(email);
-      alert('Google Meet opened. "' + (name||email) + '" email copied to clipboard. Paste it in the Add People box in Google Meet.');
-    }, 600);
-  }
-}
-
-function copyText(text) {
-  navigator.clipboard.writeText(text).catch(() => {
-    const ta = document.createElement('textarea');
-    ta.value = text; document.body.appendChild(ta); ta.select();
-    document.execCommand('copy'); document.body.removeChild(ta);
-  });
-}
-
-async function updateLeadField(leadId, field, value, el) {
-  el.disabled = true;
-  try {
-    const body = {}; body[field] = value;
-    const res  = await fetch('/api/leads/' + leadId, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
-    const data = await res.json();
-    if (data.ok) { if (field === 'status') el.className = 'lead-status-sel st-' + value; loadLeads(); }
-  } catch(e) {}
-  el.disabled = false;
-}
-
-async function sendToSelected() {
-  const ids = Array.from(selectedLeadIds);
-  if (ids.length === 0) return;
-  const btn = document.getElementById('send-selected-btn');
-  if (!confirm('Send a personalised email to ' + ids.length + ' selected lead' + (ids.length===1?'':'s') + '?')) return;
-  btn.disabled = true; btn.textContent = 'Sending...';
-  try {
-    const res  = await fetch('/api/send-selected', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({lead_ids:ids}) });
-    const data = await res.json();
-    if (!data.ok) { alert(data.message || 'Could not start sending.'); btn.disabled=false; btn.textContent='Send Emails to Selected'; return; }
-    selectedLeadIds.clear();
-    switchTab('run');
-    setActiveAgent('Email Agent', 'Handing this off to Email Agent...');
-    _runMode = 'send_email';
-    startPolling();
-  } catch(e) { alert('Network error. Please try again.'); btn.disabled=false; btn.textContent='Send Emails to Selected'; }
-}
-
-async function sendWhatsAppToSelected() {
-  const ids = Array.from(selectedLeadIds);
-  if (ids.length === 0) return;
-  const btn = document.getElementById('send-whatsapp-selected-btn');
-  if (!confirm('Send a WhatsApp message to ' + ids.length + ' selected lead' + (ids.length===1?'':'s') + '?')) return;
-  btn.disabled = true; btn.textContent = 'Sending...';
-  try {
-    const res  = await fetch('/api/send-whatsapp-selected', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({lead_ids:ids}) });
-    const data = await res.json();
-    if (!data.ok) { alert(data.message || 'Could not start sending.'); btn.disabled=false; btn.textContent='Send WhatsApp message to Selected'; return; }
-    selectedLeadIds.clear();
-    switchTab('run');
-    setActiveAgent('WhatsApp Agent', 'Handing this off to WhatsApp Agent...');
-    _runMode = 'send_whatsapp';
-    startPolling();
-  } catch(e) { alert('Network error. Please try again.'); btn.disabled=false; btn.textContent='Send WhatsApp message to Selected'; }
-}
-
-/* ── Sent Emails ─────────────────────────────────────── */
-async function loadSentEmails() {
-  const container = document.getElementById('sent-list');
-  container.innerHTML = '<div class="loading-state">Loading...</div>';
-  try {
-    const res  = await fetch('/api/sent_emails');
-    const data = await res.json();
-    if (!data.ok) { container.innerHTML = '<div class="empty-state"><strong>Error</strong>Could not load emails.</div>'; return; }
-    if (!data.emails || data.emails.length === 0) {
-      container.innerHTML = '<div class="empty-state"><strong>No emails sent yet</strong>Run the agent and send to some leads first.</div>';
-      return;
-    }
-    container.innerHTML = data.emails.map((e, i) => `
-      <div class="sent-item">
-        <div class="sent-header" onclick="toggleEmail(${i})">
-          <div class="sent-meta">
-            <div class="sent-name">${e.business_name || 'Unknown'}</div>
-            <div class="sent-email">${e.email}</div>
-            ${e.subject ? '<div class="sent-subj">' + e.subject + '</div>' : ''}
-          </div>
-          <div class="sent-right">
-            <div class="sent-date">${e.sent_date || ''}</div>
-            <div class="sent-toggle" id="toggle-${i}">View email</div>
-          </div>
-        </div>
-        <div class="sent-body" id="body-${i}">${e.body ? e.body.replace(/</g,'&lt;').replace(/>/g,'&gt;') : 'No content saved.'}</div>
-      </div>
-    `).join('');
-  } catch(err) {
-    container.innerHTML = '<div class="empty-state"><strong>Error</strong>Could not load emails.</div>';
-  }
-}
-
-function toggleEmail(i) {
-  const body   = document.getElementById('body-' + i);
-  const toggle = document.getElementById('toggle-' + i);
-  const isOpen = body.classList.toggle('open');
-  toggle.textContent = isOpen ? 'Hide email' : 'View email';
-}
-
-/* ── Polling ─────────────────────────────────────────── */
-let _pollInterval = null;
-let _pollTimer    = null;
-let _runMode      = 'discover';
-
-function setActiveAgent(name, handoffLine) {
-  const tag = document.getElementById('active-agent-tag');
-  const logBox = document.getElementById('log-box');
-  tag.textContent = name;
-  tag.style.display = 'inline-block';
-  logBox.style.display = 'block';
-  logBox.textContent = handoffLine + '\n';
-}
-
-async function runAgent() {
-  const btn    = document.getElementById('run-btn');
-  const logBox = document.getElementById('log-box');
-  btn.disabled = true; btn.textContent = 'Searching...';
-  setActiveAgent('Discovery Agent', 'Handing this off to Discovery Agent...');
-  const res  = await fetch('/api/run', { method:'POST' });
-  const data = await res.json();
-  if (!data.ok) { logBox.textContent = data.message; btn.disabled=false; btn.textContent='Find Businesses'; return; }
-  _runMode = 'discover';
-  startPolling();
-}
-
-function startLogStream() {
-  const logBox = document.getElementById('log-box');
-  logBox.style.display = 'block'; logBox.textContent = '';
-  _runMode = 'send';
-  startPolling();
-}
-
-async function checkReplies() {
-  const btn    = document.getElementById('check-replies-btn');
-  const logBox = document.getElementById('log-box');
-  btn.disabled = true; btn.textContent = 'Checking...';
-  setActiveAgent('Reply Agent', 'Handing this off to Reply Agent...');
-  try {
-    const res  = await fetch('/api/check-replies', { method:'POST' });
-    const data = await res.json();
-    if (!data.ok) { logBox.textContent = data.message || 'Could not start reply check.'; btn.disabled=false; btn.textContent='Check Replies'; return; }
-    _runMode = 'replies';
-    startPolling();
-  } catch(e) { btn.disabled=false; btn.textContent='Check Replies'; }
-}
-
-function startPolling() {
-  clearInterval(_pollTimer); clearInterval(_pollInterval);
-  const btn       = document.getElementById('run-btn');
-  const logBox    = document.getElementById('log-box');
-  const startTime = Date.now();
-
-  _pollTimer = setInterval(async () => {
-    try {
-      const res  = await fetch('/api/poll');
-      const data = await res.json();
-      if (!data.ok) return;
-
-      if (data.lines && data.lines.length) {
-        const userLines = data.lines.filter(l => !l.trim().startsWith('[diag]') && !l.includes('   [diag]'));
-        if (userLines.length) { logBox.textContent += userLines.join('\n') + '\n'; logBox.scrollTop = logBox.scrollHeight; }
-      }
-
-      const elapsed = Date.now() - startTime;
-      const isDone  = data.done || (!data.running && !data.lines.length && elapsed > 10000);
-
-      if (isDone) {
-        clearInterval(_pollTimer); _pollTimer = null;
-        btn.disabled = false; btn.textContent = 'Find Businesses';
-        document.getElementById('active-agent-tag').style.display = 'none';
-        const repBtn = document.getElementById('check-replies-btn');
-        if (repBtn) {
-          repBtn.disabled = false;
-          repBtn.textContent = _runMode === 'replies' ? 'Replies checked' : 'Check Replies';
-          if (_runMode === 'replies') setTimeout(() => { repBtn.textContent = 'Check Replies'; }, 3000);
-        }
-        const emailBtn = document.getElementById('send-selected-btn');
-        if (emailBtn) { emailBtn.disabled = (selectedLeadIds.size === 0); emailBtn.textContent = 'Send Emails to Selected'; }
-        const waBtn = document.getElementById('send-whatsapp-selected-btn');
-        if (waBtn) { waBtn.disabled = (selectedLeadIds.size === 0); waBtn.textContent = 'Send WhatsApp message to Selected'; }
-        document.getElementById('reset-btn').style.display = 'none';
-        _pollInterval = setInterval(loadStatus, 10000);
-        loadStatus();
-        setTimeout(() => {
-          loadLeads();
-          if (_runMode === 'discover') switchTab('leads');
-          _runMode = 'discover';
-        }, 600);
-      }
-    } catch(e) {}
-  }, 1000);
-}
-
 async function logout() { await fetch('/api/auth/logout', { method:'POST' }); window.location.href = '/'; }
 
 /* ── Init ────────────────────────────────────────────── */
 loadProfile();
-loadStatus();
 loadConversations();
-setInterval(loadStatus, 10000);
 </script>
 </body>
 </html>

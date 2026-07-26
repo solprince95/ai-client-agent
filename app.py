@@ -1,36 +1,35 @@
 """
-app.py, AI Client Agent (multi-user SaaS edition)
+app.py, Vajra Labs (clinic conversation product)
 Flask + Supabase Auth. Deployed on Render.
 
 Routes:
-  /                    landing page (or redirect to dashboard if logged in)
-  /dashboard           the app itself, login required
-  /api/auth/signup     create account (Supabase Auth)
-  /api/auth/login      log in
-  /api/auth/logout     log out
-  /api/profile         GET/POST, read or save the user's profile
-  /api/status          profile completeness + trial/license status
-  /api/run             discover businesses + save as leads (no sending)
-  /api/send-selected   send AI-personalised emails to chosen lead IDs
-  /api/check-replies   check this user's Gmail inbox for replies
-  /api/stream          Server-Sent Events log stream for the current run
-  /api/sent_emails     GET, list of emails actually sent
-  /api/leads           GET, CRM lead list, filterable by status/group/search
-  /api/leads/<id>      PATCH, update a lead's status or group tag
-  /api/leads/groups    GET, distinct group tags for the filter dropdown
+  /                              landing page (or redirect to dashboard if logged in)
+  /dashboard                     the app itself, login required
+  /api/auth/signup               create account (Supabase Auth)
+  /api/auth/login                log in
+  /api/auth/logout               log out
+  /api/profile                   GET/POST, read or save the user's profile
+  /api/whatsapp/connect          placeholder for future WhatsApp channel (Phase 4)
+  /api/billing/*                 Razorpay subscription, cancellation, history
+  /api/webhooks/razorpay         Razorpay payment webhook
+  /api/clinic                    GET/POST, the clinic's knowledge base (Qualify Agent's context)
+  /api/conversations/*           dashboard-side conversation list, messages, human takeover
+  /chat/<clinic_id>              hosted booking page (no-website fallback)
+  /api/widget/*                  public chat widget API (embedded on a clinic's own site)
+  /api/appointments/*            booking request confirmation
+
+Old outbound lead-gen/cold-outreach tools (Discovery Agent, cold Email/
+WhatsApp send, the old Leads/CRM) were removed as part of the pivot to
+an inbound conversation product. See vajra_labs_pivot_plan.md.
 """
 
 import os
-import queue
-import threading
 from datetime import datetime, timezone
 from functools import wraps
 
 from flask import Flask, render_template, request, jsonify, Response, session, redirect
 from supabase import create_client, Client
 
-import agent_core
-import whatsapp_agent
 import billing_agent
 import conversation_agent
 import followup_agent
@@ -118,18 +117,6 @@ def _add_widget_cors_headers(response):
         response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
-
-
-# In-memory per-user run state (log queue, running flag).
-# Fine for a single Render instance; if you ever scale to multiple
-# instances behind a load balancer, this would need to move to Redis.
-_user_states = {}
-
-
-def get_user_state(uid):
-    if uid not in _user_states:
-        _user_states[uid] = {"running": False, "log_queue": queue.Queue(), "last_result": None, "log_buffer": []}
-    return _user_states[uid]
 
 
 def login_required(f):
@@ -375,386 +362,6 @@ def api_whatsapp_connect():
     return jsonify({"ok": False, "message": "WhatsApp connection is being finalized."})
 
 
-# ======================================================
-#  STATUS
-# ======================================================
-@app.route("/api/status")
-@login_required
-def api_status():
-    uid = session["user_id"]
-    state = get_user_state(uid)
-    try:
-        profile = _get_profile(uid)
-        days_left = _days_left_from(profile.get("trial_start"))
-
-        required = ["full_name", "gmail", "your_service", "your_about", "target_city"]
-        profile_complete = all(str(profile.get(k, "")).strip() for k in required)
-
-        return jsonify({
-            "ok": True,
-            "profile_complete": profile_complete,
-            "days_left": days_left,
-            "is_paid": bool(profile.get("is_paid", False)),
-            "running": state["running"],
-            "total_sent": agent_core.get_stats(user_id=uid)["total_sent"],
-        })
-    except Exception as e:
-        return jsonify({"ok": False, "message": str(e)})
-
-
-# ======================================================
-#  RUN THE AGENT
-# ======================================================
-def _build_config(profile):
-    business_types = profile.get("business_types") or (
-        "small business,shop,store,restaurant,hotel,clinic,school,agency,company,office,pvt ltd,enterprise,industries"
-    )
-    if isinstance(business_types, str):
-        business_types = [b.strip() for b in business_types.split(",") if b.strip()]
-
-    return {
-        "YOUR_EMAIL": profile.get("gmail", ""),
-        "YOUR_NAME": profile.get("full_name", ""),
-        "YOUR_SERVICE": profile.get("your_service", ""),
-        "YOUR_ABOUT": profile.get("your_about", ""),
-        "TARGET_CITY": profile.get("target_city", ""),
-        "BUSINESS_TYPES": business_types,
-        "GMAIL_ADDRESS": profile.get("gmail", ""),
-        "GMAIL_APP_PASSWORD": profile.get("gmail_app_password", "") or "",
-        "GOOGLE_MAPS_API_KEY": OWNER_GOOGLE_MAPS_API_KEY,
-        "MAX_RESULTS_PER_QUERY": 5,
-        "DELAY_BETWEEN_EMAILS": 3,
-        "ATTACHMENT_PATH": "",
-        "ATTACHMENT_NAME": "",
-        # WhatsApp Cloud API, blank until the user connects (Embedded
-        # Signup flow not built yet). See whatsapp_agent.py.
-        "WHATSAPP_ACCESS_TOKEN": profile.get("whatsapp_access_token", "") or "",
-        "WHATSAPP_PHONE_NUMBER_ID": profile.get("whatsapp_phone_number_id", "") or "",
-        "WHATSAPP_BUSINESS_ACCOUNT_ID": profile.get("whatsapp_business_account_id", "") or "",
-        "WHATSAPP_TEMPLATE_NAME": profile.get("whatsapp_template_name", "") or "business_outreach_intro",
-        "WHATSAPP_TEMPLATE_LANG": profile.get("whatsapp_template_lang", "") or "en_US",
-    }
-
-
-def _check_trial_or_paid(profile):
-    """Returns (allowed: bool, message: str)."""
-    if profile.get("is_paid"):
-        return True, ""
-    days_left = _days_left_from(profile.get("trial_start"))
-    if days_left > 0:
-        return True, ""
-    return False, "Your free trial has ended. Please upgrade to continue."
-
-
-@app.route("/api/run", methods=["POST"])
-@login_required
-def api_run():
-    """
-    Discovery only: finds businesses, gets websites/phones/emails, and
-    saves them to the leads table as 'discovered'. Sends NO emails :
-    the user picks who to email from the Leads tab afterwards.
-    """
-    uid = session["user_id"]
-    state = get_user_state(uid)
-
-    if state["running"]:
-        return jsonify({"ok": False, "message": "Agent is already running."})
-
-    profile = _get_profile(uid)
-    allowed, msg = _check_trial_or_paid(profile)
-    if not allowed:
-        return jsonify({"ok": False, "message": msg})
-
-    required = ["full_name", "gmail", "your_service", "your_about", "target_city"]
-    if not all(str(profile.get(k, "")).strip() for k in required):
-        return jsonify({"ok": False, "message": "Please complete your profile first."})
-
-    cfg = _build_config(profile)
-
-    def _run():
-        def log(message):
-            msg = str(message)
-            state["log_buffer"].append(msg)
-            state["log_queue"].put(msg)
-        try:
-            result = agent_core.run_discovery(cfg, log=log, user_id=uid)
-            state["last_result"] = result
-        except Exception as e:
-            log(f"❌ Unexpected error: {e}")
-        finally:
-            log("__DONE__")
-            state["running"] = False
-
-    state["running"] = True
-    state["log_queue"] = queue.Queue()
-    state["log_buffer"] = []
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/send-selected", methods=["POST"])
-@login_required
-def api_send_selected():
-    """
-    Sends AI-personalised emails only to the lead IDs the user checked
-    in the Leads tab. lead_ids can be an empty list (sends nothing),
-    a subset, or every discovered lead.
-    """
-    uid = session["user_id"]
-    state = get_user_state(uid)
-
-    if state["running"]:
-        return jsonify({"ok": False, "message": "Agent is already running."})
-
-    profile = _get_profile(uid)
-    allowed, msg = _check_trial_or_paid(profile)
-    if not allowed:
-        return jsonify({"ok": False, "message": msg})
-
-    data = request.get_json(silent=True) or {}
-    lead_ids = data.get("lead_ids") or []
-    if not isinstance(lead_ids, list):
-        return jsonify({"ok": False, "message": "lead_ids must be a list."})
-
-    cfg = _build_config(profile)
-
-    def _run():
-        def log(message):
-            msg = str(message)
-            state["log_buffer"].append(msg)
-            state["log_queue"].put(msg)
-        try:
-            result = agent_core.send_to_selected_leads(lead_ids, cfg, log=log, user_id=uid)
-            state["last_result"] = result
-        except Exception as e:
-            log(f"❌ Unexpected error: {e}")
-        finally:
-            log("__DONE__")
-            state["running"] = False
-
-    state["running"] = True
-    state["log_queue"] = queue.Queue()
-    state["log_buffer"] = []
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/send-whatsapp-selected", methods=["POST"])
-@login_required
-def api_send_whatsapp_selected():
-    """
-    Sends WhatsApp messages only to the lead IDs the user checked in the
-    Leads tab (uses each lead's stored phone number). Mirrors
-    /api/send-selected but for the WhatsApp channel.
-
-    Body: { "lead_ids": [...], "use_template": true|false }
-    use_template defaults to true, WhatsApp requires an approved
-    template for the first message to a new contact (cold outreach).
-    Set to false only for a reply within an existing 24h conversation.
-    """
-    uid = session["user_id"]
-    state = get_user_state(uid)
-
-    if state["running"]:
-        return jsonify({"ok": False, "message": "Agent is already running."})
-
-    profile = _get_profile(uid)
-    allowed, msg = _check_trial_or_paid(profile)
-    if not allowed:
-        return jsonify({"ok": False, "message": msg})
-
-    data = request.get_json(silent=True) or {}
-    lead_ids = data.get("lead_ids") or []
-    use_template = data.get("use_template", True)
-    if not isinstance(lead_ids, list):
-        return jsonify({"ok": False, "message": "lead_ids must be a list."})
-
-    cfg = _build_config(profile)
-
-    if not whatsapp_agent.whatsapp_configured(cfg):
-        return jsonify({
-            "ok": False,
-            "message": "WhatsApp isn't connected yet. Connect a WhatsApp Business "
-                       "number in Setup first."
-        })
-
-    def _run():
-        def log(message):
-            msg = str(message)
-            state["log_buffer"].append(msg)
-            state["log_queue"].put(msg)
-        try:
-            result = whatsapp_agent.send_whatsapp_to_selected_leads(
-                lead_ids, cfg, log=log, user_id=uid, use_template=use_template
-            )
-            state["last_result"] = result
-        except Exception as e:
-            log(f"❌ Unexpected error: {e}")
-        finally:
-            log("__DONE__")
-            state["running"] = False
-
-    state["running"] = True
-    state["log_queue"] = queue.Queue()
-    state["log_buffer"] = []
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/check-replies", methods=["POST"])
-@login_required
-def api_check_replies():
-    uid = session["user_id"]
-    state = get_user_state(uid)
-
-    if state["running"]:
-        return jsonify({"ok": False, "message": "Agent is already running."})
-
-    profile = _get_profile(uid)
-    allowed, msg = _check_trial_or_paid(profile)
-    if not allowed:
-        return jsonify({"ok": False, "message": msg})
-
-    if not profile.get("gmail"):
-        return jsonify({"ok": False, "message": "Please complete your profile first."})
-
-    cfg = _build_config(profile)
-
-    def _run():
-        def log(message):
-            msg = str(message)
-            state["log_buffer"].append(msg)
-            state["log_queue"].put(msg)
-        try:
-            agent_core.check_replies(cfg, log=log, user_id=uid)
-        except Exception as e:
-            log(f"❌ Unexpected error: {e}")
-        finally:
-            log("__DONE__")
-            state["running"] = False
-
-    state["running"] = True
-    state["log_queue"] = queue.Queue()
-    state["log_buffer"] = []
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    return jsonify({"ok": True})
-
-
-# ======================================================
-#  LOG STREAM (Server-Sent Events)
-# ======================================================
-
-@app.route("/api/sent_emails", methods=["GET"])
-@login_required
-def api_sent_emails():
-    uid = session["user_id"]
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        return jsonify({"ok": False, "message": "Supabase not configured"})
-    try:
-        from supabase import create_client
-        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("sent_log").select("*").eq("user_id", uid).order("created_at", desc=True).execute()
-        return jsonify({"ok": True, "emails": res.data})
-    except Exception as e:
-        return jsonify({"ok": False, "message": str(e)})
-
-
-# ======================================================
-#  LEADS (CRM)
-# ======================================================
-@app.route("/api/leads", methods=["GET"])
-@login_required
-def api_get_leads():
-    uid    = session["user_id"]
-    status = request.args.get("status") or None
-    search = request.args.get("q") or None
-    try:
-        leads = agent_core.get_leads(uid, status=status, search=search)
-        return jsonify({"ok": True, "leads": leads})
-    except Exception as e:
-        return jsonify({"ok": False, "message": str(e)})
-
-
-@app.route("/api/leads/<lead_id>", methods=["PATCH"])
-@login_required
-def api_update_lead(lead_id):
-    uid = session["user_id"]
-    data = request.get_json(silent=True) or {}
-    try:
-        ok = agent_core.update_lead(lead_id, uid, data)
-        if ok:
-            return jsonify({"ok": True})
-        return jsonify({"ok": False, "message": "No valid fields to update."})
-    except Exception as e:
-        return jsonify({"ok": False, "message": str(e)})
-
-
-
-
-
-
-@app.route("/api/log-buffer")
-@login_required
-def api_log_buffer():
-    """Returns all log lines buffered so far for the current run.
-    Used by the frontend when it reconnects after an SSE drop."""
-    uid = session["user_id"]
-    state = get_user_state(uid)
-    return jsonify({"ok": True, "log": state.get("log_buffer", []),
-                    "running": state.get("running", False)})
-
-
-@app.route("/api/reset", methods=["POST"])
-@login_required
-def api_reset():
-    """Force-clears the running state if the agent got stuck."""
-    uid = session["user_id"]
-    state = get_user_state(uid)
-    state["running"] = False
-    state["log_queue"] = queue.Queue()
-    state["log_buffer"] = []
-    return jsonify({"ok": True})
-
-
-@app.route("/api/poll")
-@login_required
-def api_poll():
-    """
-    The browser calls this every second while a run is active.
-    Returns all log lines queued since the last poll, plus running/done status.
-    Never blocks, drains the queue instantly and returns.
-    """
-    uid = session["user_id"]
-    state = get_user_state(uid)
-    q = state["log_queue"]
-
-    lines = []
-    done  = False
-    while True:
-        try:
-            line = q.get_nowait()
-            if line == "__DONE__":
-                done = True
-                break
-            lines.append(line)
-        except queue.Empty:
-            break
-
-    return jsonify({
-        "ok":      True,
-        "lines":   lines,
-        "running": state.get("running", False),
-        "done":    done,
-    })
-
-
-# ======================================================
-#  BILLING (Razorpay), "Billing Agent"
-# ======================================================
 @app.route("/api/billing/create-subscription", methods=["POST"])
 @login_required
 def api_billing_create_subscription():
