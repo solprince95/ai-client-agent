@@ -721,9 +721,6 @@ body {
       <button class="sb-link active" onclick="switchTab('conversations')">
         <span class="sb-link-dot"></span> Conversations
       </button>
-      <button class="sb-link" onclick="switchTab('clinic')">
-        <span class="sb-link-dot"></span> Clinic Setup
-      </button>
       <button class="sb-link" onclick="switchTab('setup')">
         <span class="sb-link-dot"></span> Setup
       </button>
@@ -779,10 +776,54 @@ body {
     </div>
 
     <!-- CLINIC SETUP -->
-    <div class="tab-panel" id="tab-clinic">
+    <!-- SETUP -->
+    <div class="tab-panel" id="tab-setup">
       <div class="page-head">
-        <h1>Clinic Setup</h1>
-        <p>This is what Reply Agent and Qualify Agent know about your clinic.</p>
+        <h1>Setup</h1>
+        <p>Your account and your clinic's details, this is what Reply Agent and Qualify Agent know.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Account</div>
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="field-label">Full Name</label>
+            <input type="text" class="field-inp" id="full_name" placeholder="Your name"/>
+          </div>
+          <div class="form-field">
+            <label class="field-label">Gmail Address</label>
+            <input type="email" class="field-inp" id="gmail" placeholder="your@gmail.com"/>
+          </div>
+          <div class="form-field full">
+            <label class="field-label">WhatsApp</label>
+            <div class="whatsapp-connect-row">
+              <button class="save-btn whatsapp-connect-btn" id="connect-whatsapp-btn" onclick="connectWhatsApp()" type="button">Connect WhatsApp</button>
+              <span id="whatsapp-status" style="font-weight:700;margin-left:10px;"></span>
+            </div>
+            <div class="field-hint">
+              Opens Meta's secure sign-in to link your WhatsApp Business number, no manual setup needed.
+              This one-click option isn't ready yet, use manual setup below until then.
+            </div>
+
+            <div style="margin-top:14px;">
+              <button type="button" class="field-hint" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline;color:var(--blue2);" onclick="toggleWhatsAppManual()">Connect manually instead</button>
+              <div id="whatsapp-manual-fields" style="display:none;margin-top:12px;">
+                <input type="text" class="field-inp" id="wa_access_token" placeholder="Access Token" style="margin-bottom:8px;"/>
+                <input type="text" class="field-inp" id="wa_phone_number_id" placeholder="Phone Number ID" style="margin-bottom:8px;"/>
+                <input type="text" class="field-inp" id="wa_business_account_id" placeholder="WhatsApp Business Account ID" style="margin-bottom:8px;"/>
+                <button class="save-btn" id="save-whatsapp-manual-btn" onclick="saveWhatsAppManual()" type="button">Save WhatsApp Details</button>
+                <div class="field-hint">
+                  Find these in Meta App Dashboard -> WhatsApp -> API Setup. A temporary access token lasts 24 hours,
+                  for anything longer-term you'll want a permanent token later.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="save-row" style="margin-top:16px;">
+          <button class="save-btn" id="save-profile-btn" onclick="saveProfile()">Save Account</button>
+          <span class="save-feedback" id="save-msg"></span>
+        </div>
       </div>
 
       <div class="card">
@@ -839,91 +880,6 @@ body {
         <div class="card-title" style="margin-top:20px;">No Website? Share This Link Instead</div>
         <div class="card-sub">A ready-made chat page on our domain, share it directly with patients (WhatsApp bio link, Instagram, Google Business Profile, etc).</div>
         <div class="upi-box" id="widget-hosted-link" style="user-select:all;"></div>
-      </div>
-    </div>
-    <!-- SETUP -->
-    <div class="tab-panel" id="tab-setup">
-      <div class="page-head">
-        <h1>Setup</h1>
-        <p>Your profile tells the agent what to say and who to look for.</p>
-      </div>
-      <div class="panel-body">
-        <div class="card">
-          <div class="card-title">Your Profile</div>
-          <div class="form-grid">
-            <div class="form-field">
-              <label class="field-label">Full Name</label>
-              <input type="text" class="field-inp" id="full_name" placeholder="Your name"/>
-            </div>
-            <div class="form-field">
-              <label class="field-label">Business / Brand Name</label>
-              <input type="text" class="field-inp" id="business_name" placeholder="Optional"/>
-            </div>
-            <div class="form-field">
-              <label class="field-label">Your Service</label>
-              <input type="text" class="field-inp" id="your_service" placeholder="e.g. Website Design, Photography"/>
-            </div>
-            <div class="form-field full">
-              <label class="field-label">About You / Your Pitch</label>
-              <textarea class="field-ta" id="your_about" placeholder="Brief description of your service and what you offer..."></textarea>
-            </div>
-            <div class="form-field full">
-              <label class="field-label">WhatsApp</label>
-              <div class="whatsapp-connect-row">
-                <button class="save-btn whatsapp-connect-btn" id="connect-whatsapp-btn" onclick="connectWhatsApp()" type="button">Connect WhatsApp</button>
-                <span id="whatsapp-status" style="font-weight:700;margin-left:10px;"></span>
-              </div>
-              <div class="field-hint">
-                Opens Meta's secure sign-in to link your WhatsApp Business number, no manual setup needed.
-                This one-click option isn't ready yet, use manual setup below until then.
-              </div>
-
-              <div style="margin-top:14px;">
-                <button type="button" class="field-hint" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline;color:var(--blue2);" onclick="toggleWhatsAppManual()">Connect manually instead</button>
-                <div id="whatsapp-manual-fields" style="display:none;margin-top:12px;">
-                  <input type="text" class="field-inp" id="wa_access_token" placeholder="Access Token" style="margin-bottom:8px;"/>
-                  <input type="text" class="field-inp" id="wa_phone_number_id" placeholder="Phone Number ID" style="margin-bottom:8px;"/>
-                  <input type="text" class="field-inp" id="wa_business_account_id" placeholder="WhatsApp Business Account ID" style="margin-bottom:8px;"/>
-                  <button class="save-btn" id="save-whatsapp-manual-btn" onclick="saveWhatsAppManual()" type="button">Save WhatsApp Details</button>
-                  <div class="field-hint">
-                    Find these in Meta App Dashboard -> WhatsApp -> API Setup. A temporary access token lasts 24 hours,
-                    for anything longer-term you'll want a permanent token later.
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="form-field">
-              <label class="field-label">Target City</label>
-              <input type="text" class="field-inp" id="target_city" placeholder="e.g. Surat, Ahmedabad"/>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">Gmail Settings</div>
-          <div class="card-sub">Your Gmail is used for outreach sending and reply checking.</div>
-          <div class="form-grid">
-            <div class="form-field full">
-              <label class="field-label">Gmail Address</label>
-              <input type="email" class="field-inp" id="gmail" placeholder="your@gmail.com"/>
-            </div>
-            <div class="form-field full">
-              <label class="field-label">Secure Reply Access</label>
-              <input type="text" class="field-inp" id="gmail_app_password" placeholder=""/>
-              <div class="field-hint">
-                Needed to check your inbox for replies automatically. Generate one at
-                <a href="https://myaccount.google.com/apppasswords" target="_blank">myaccount.google.com/apppasswords</a>
-                (requires 2-Step Verification).
-                <span id="app-pw-status" style="font-weight:700;margin-left:4px;"></span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="save-row">
-          <button class="save-btn" id="save-profile-btn" onclick="saveProfile()">Save Profile</button>
-          <span class="save-feedback" id="save-msg"></span>
-        </div>
       </div>
     </div>
 
@@ -990,12 +946,12 @@ body {
 <script>
 /* ── Tab switching ───────────────────────────────────── */
 function switchTab(tab) {
-  const tabs = ['conversations','clinic','setup','billing'];
+  const tabs = ['conversations','setup','billing'];
   document.querySelectorAll('.sb-link').forEach((el, i) => el.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   if (tab === 'conversations') loadConversations();
-  if (tab === 'clinic') loadClinic();
+  if (tab === 'setup') loadClinic();
 }
 
 /* ── Profile ─────────────────────────────────────────── */
@@ -1006,14 +962,7 @@ async function loadProfile() {
   const p = data.profile;
   window._myProfile = p;
   document.getElementById('full_name').value      = p.full_name || '';
-  document.getElementById('business_name').value  = p.business_name || '';
-  document.getElementById('your_service').value   = p.your_service || '';
-  document.getElementById('your_about').value     = p.your_about || '';
-  document.getElementById('target_city').value    = p.target_city || '';
   document.getElementById('gmail').value          = p.gmail || '';
-  const pwSt = document.getElementById('app-pw-status');
-  pwSt.textContent = p.has_gmail_app_password ? 'Saved' : 'Not set';
-  pwSt.style.color = p.has_gmail_app_password ? 'var(--green)' : 'var(--red)';
 
   const waSt = document.getElementById('whatsapp-status');
   waSt.textContent = p.has_whatsapp ? '✅ Connected' : 'Not connected';
@@ -1195,15 +1144,9 @@ async function saveProfile() {
   const msg = document.getElementById('save-msg');
   const btn = document.getElementById('save-profile-btn');
   const data = {
-    full_name:     document.getElementById('full_name').value,
-    business_name: document.getElementById('business_name').value,
-    your_service:  document.getElementById('your_service').value,
-    your_about:    document.getElementById('your_about').value,
-    target_city:   document.getElementById('target_city').value,
-    gmail:         document.getElementById('gmail').value,
+    full_name: document.getElementById('full_name').value,
+    gmail:     document.getElementById('gmail').value,
   };
-  const appPw = document.getElementById('gmail_app_password').value.trim();
-  if (appPw) data.gmail_app_password = appPw.replace(/\s/g, '');
   btn.disabled = true;
   msg.style.display = 'inline'; msg.style.color = 'var(--t3)'; msg.textContent = 'Saving...';
   try {
@@ -1212,8 +1155,7 @@ async function saveProfile() {
     if (res.status === 401) { window.location.href = '/'; return; }
     if (result.ok) {
       msg.style.color = 'var(--green)'; msg.textContent = 'Saved successfully.';
-      document.getElementById('gmail_app_password').value = '';
-      await loadProfile(); await loadStatus();
+      await loadProfile();
     } else {
       msg.style.color = 'var(--red)'; msg.textContent = result.message || 'Could not save.';
     }

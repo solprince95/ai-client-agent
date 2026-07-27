@@ -304,8 +304,6 @@ def api_get_profile():
         profile["days_left"] = days_left
         profile["trial_active"] = days_left > 0
         profile["is_paid"] = bool(profile.get("is_paid", False))
-        profile["has_gmail_app_password"] = bool(profile.get("gmail_app_password"))
-        profile.pop("gmail_app_password", None)  # never send this back to the browser
         profile["has_whatsapp"] = bool(profile.get("whatsapp_access_token") and profile.get("whatsapp_phone_number_id"))
         profile.pop("whatsapp_access_token", None)  # never send this back to the browser
         return jsonify({"ok": True, "profile": profile})
@@ -320,9 +318,7 @@ def api_save_profile():
     data = request.get_json(silent=True) or {}
 
     allowed = [
-        "full_name", "business_name", "gmail",
-        "your_service", "your_about", "target_city", "business_types",
-        "gmail_app_password",
+        "full_name", "gmail",
         "whatsapp_access_token", "whatsapp_phone_number_id", "whatsapp_business_account_id",
     ]
     update = {k: v for k, v in data.items() if k in allowed}
