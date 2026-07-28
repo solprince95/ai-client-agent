@@ -32,6 +32,7 @@ from supabase import create_client, Client
 
 import billing_agent
 import conversation_agent
+import calendar_agent
 import followup_agent
 from paths import get_resource_dir
 
@@ -530,11 +531,67 @@ def api_conversation_appointment(conversation_id):
 @login_required
 def api_confirm_appointment(appointment_id):
     uid = session["user_id"]
+    data = request.get_json(silent=True) or {}
+    confirmed_time = data.get("confirmed_time", "")  # ISO datetime, e.g. "2026-08-01T15:30"
+
     try:
-        supabase.table("appointments").update({"status": "confirmed"}).eq("id", appointment_id).eq("user_id", uid).execute()
-        return jsonify({"ok": True})
+        appt_res = supabase.table("appointments").select("*").eq("id", appointment_id).eq("user_id", uid).single().execute()
+        appt = appt_res.data
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)})
+
+    if not appt:
+        return jsonify({"ok": False, "message": "Appointment not found."})
+
+    update = {"status": "confirmed"}
+    calendar_result = None
+    if confirmed_time:
+        update["confirmed_time"] = confirmed_time
+        try:
+            clinic_res = supabase.table("clinics").select("*").eq("id", appt["clinic_id"]).single().execute()
+            clinic = clinic_res.data or {}
+            if clinic.get("google_calendar_connected"):
+                calendar_result = calendar_agent.create_calendar_event(
+                    clinic, appt.get("visitor_name", ""), appt.get("visitor_contact", ""),
+                    appt.get("requested_text", ""), confirmed_time, sb=supabase,
+                )
+        except Exception:
+            pass
+
+    try:
+        supabase.table("appointments").update(update).eq("id", appointment_id).eq("user_id", uid).execute()
+        result = {"ok": True}
+        if calendar_result is not None:
+            result["calendar"] = calendar_result
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+
+
+@app.route("/api/calendar/connect")
+@login_required
+def api_calendar_connect():
+    if not calendar_agent.calendar_configured():
+        return jsonify({"ok": False, "message": "Google Calendar isn't configured yet."})
+    uid = session["user_id"]
+    return redirect(calendar_agent.get_authorization_url(uid))
+
+
+@app.route("/api/calendar/oauth/callback")
+def api_calendar_oauth_callback():
+    code = request.args.get("code", "")
+    user_id = request.args.get("state", "")
+    if not code or not user_id:
+        return redirect("/dashboard?calendar=error")
+    result = calendar_agent.handle_oauth_callback(code, user_id, sb=supabase)
+    return redirect("/dashboard?calendar=connected" if result.get("ok") else "/dashboard?calendar=error")
+
+
+@app.route("/api/calendar/disconnect", methods=["POST"])
+@login_required
+def api_calendar_disconnect():
+    uid = session["user_id"]
+    return jsonify(calendar_agent.disconnect_calendar(uid, sb=supabase))
 
 
 @app.route("/api/widget/start", methods=["POST"])
