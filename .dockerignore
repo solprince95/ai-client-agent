@@ -1,0 +1,12 @@
+.git
+__pycache__/
+*.pyc
+*.pyo
+.python-version
+.env
+.venv
+venv/
+*.bak
+PAYMENT.txt
+Media/
+.DS_Store

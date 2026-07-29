@@ -57,23 +57,52 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and
 #  quiet before booking, sends the next follow-up in the sequence
 #  (24h / 2d / 4d / 1wk). Only starts if Supabase is actually
 #  configured, so local dev without env vars doesn't error out.
+#
+#  This in-process scheduler only works on a host that stays running
+#  all the time (e.g. Render). On Cloud Run, instances can scale to
+#  zero between requests, which would silently stop this thread. Set
+#  ENABLE_INPROCESS_SCHEDULER=0 there and use Cloud Scheduler to hit
+#  /internal/followup-check on a timer instead (see below).
 # ======================================================
-if supabase is not None:
+CRON_SECRET = os.environ.get("CRON_SECRET", "")
+
+
+def _run_followup_job():
+    try:
+        result = followup_agent.run_followup_check(sb=supabase, log=print)
+        print(f"Follow-up Agent: {result}")
+        return result
+    except Exception as e:
+        print(f"Follow-up Agent scheduler error: {e}")
+        return {"ok": False, "error": str(e)}
+
+
+if supabase is not None and os.environ.get("ENABLE_INPROCESS_SCHEDULER", "1") == "1":
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
-
-        def _run_followup_job():
-            try:
-                result = followup_agent.run_followup_check(sb=supabase, log=print)
-                print(f"Follow-up Agent: {result}")
-            except Exception as e:
-                print(f"Follow-up Agent scheduler error: {e}")
 
         _scheduler = BackgroundScheduler(daemon=True)
         _scheduler.add_job(_run_followup_job, "interval", hours=1, id="followup_check")
         _scheduler.start()
     except Exception as e:
         print(f"Could not start Follow-up Agent scheduler: {e}")
+
+
+@app.route("/internal/followup-check", methods=["POST"])
+def internal_followup_check():
+    """
+    HTTP trigger for the Follow-up Agent, meant to be called by Google
+    Cloud Scheduler (hourly) when ENABLE_INPROCESS_SCHEDULER=0. Protected
+    by a shared secret so it can't be triggered by randoms hitting the URL.
+    Set CRON_SECRET as an env var and configure Cloud Scheduler to send
+    it as the "X-Cron-Secret" header.
+    """
+    if not CRON_SECRET or request.headers.get("X-Cron-Secret", "") != CRON_SECRET:
+        return jsonify({"ok": False, "message": "Unauthorized."}), 401
+    if supabase is None:
+        return jsonify({"ok": False, "message": "Supabase not configured."}), 500
+    result = _run_followup_job()
+    return jsonify(result)
 
 # Your Google Maps API key, set this as an environment variable on
 # Render (Settings → Environment), never hardcode it here.
