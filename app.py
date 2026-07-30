@@ -34,7 +34,11 @@ import billing_agent
 import conversation_agent
 import calendar_agent
 import followup_agent
+import reminder_agent
+import notifications
 from paths import get_resource_dir
+
+SITE_URL = "https://vajralabs.co.in"
 
 # ======================================================
 #  SETUP
@@ -52,17 +56,20 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
 
 # ======================================================
-#  FOLLOW-UP AGENT SCHEDULER
-#  Runs hourly in the background, checks for conversations that went
-#  quiet before booking, sends the next follow-up in the sequence
-#  (24h / 2d / 4d / 1wk). Only starts if Supabase is actually
-#  configured, so local dev without env vars doesn't error out.
+#  FOLLOW-UP AGENT + REMINDER AGENT SCHEDULERS
+#  Run hourly in the background. Follow-up Agent checks for
+#  conversations that went quiet before booking (24h / 2d / 4d / 1wk).
+#  Reminder Agent checks for confirmed appointments happening in about
+#  24 hours and sends a pre-visit reminder with a reschedule/cancel
+#  link. Only start if Supabase is actually configured, so local dev
+#  without env vars doesn't error out.
 #
 #  This in-process scheduler only works on a host that stays running
 #  all the time (e.g. Render). On Cloud Run, instances can scale to
 #  zero between requests, which would silently stop this thread. Set
 #  ENABLE_INPROCESS_SCHEDULER=0 there and use Cloud Scheduler to hit
-#  /internal/followup-check on a timer instead (see below).
+#  /internal/followup-check and /internal/reminder-check on a timer
+#  instead (see below).
 # ======================================================
 CRON_SECRET = os.environ.get("CRON_SECRET", "")
 
@@ -77,15 +84,26 @@ def _run_followup_job():
         return {"ok": False, "error": str(e)}
 
 
+def _run_reminder_job():
+    try:
+        result = reminder_agent.run_reminder_check(sb=supabase, log=print)
+        print(f"Reminder Agent: {result}")
+        return result
+    except Exception as e:
+        print(f"Reminder Agent scheduler error: {e}")
+        return {"ok": False, "error": str(e)}
+
+
 if supabase is not None and os.environ.get("ENABLE_INPROCESS_SCHEDULER", "1") == "1":
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
 
         _scheduler = BackgroundScheduler(daemon=True)
         _scheduler.add_job(_run_followup_job, "interval", hours=1, id="followup_check")
+        _scheduler.add_job(_run_reminder_job, "interval", hours=1, id="reminder_check")
         _scheduler.start()
     except Exception as e:
-        print(f"Could not start Follow-up Agent scheduler: {e}")
+        print(f"Could not start Follow-up/Reminder Agent scheduler: {e}")
 
 
 @app.route("/internal/followup-check", methods=["POST"])
@@ -102,6 +120,21 @@ def internal_followup_check():
     if supabase is None:
         return jsonify({"ok": False, "message": "Supabase not configured."}), 500
     result = _run_followup_job()
+    return jsonify(result)
+
+
+@app.route("/internal/reminder-check", methods=["POST"])
+def internal_reminder_check():
+    """
+    HTTP trigger for the Reminder Agent, same pattern as the Follow-up
+    Agent's endpoint above. Point a second Cloud Scheduler job at this
+    one, also hourly, also with the "X-Cron-Secret" header.
+    """
+    if not CRON_SECRET or request.headers.get("X-Cron-Secret", "") != CRON_SECRET:
+        return jsonify({"ok": False, "message": "Unauthorized."}), 401
+    if supabase is None:
+        return jsonify({"ok": False, "message": "Supabase not configured."}), 500
+    result = _run_reminder_job()
     return jsonify(result)
 
 # Your Google Maps API key, set this as an environment variable on
@@ -574,21 +607,57 @@ def api_confirm_appointment(appointment_id):
 
     update = {"status": "confirmed"}
     calendar_result = None
+    clinic = {}
     if confirmed_time:
         update["confirmed_time"] = confirmed_time
+        update["reminder_sent"] = False  # fresh time slot, so it's eligible for a new reminder
         try:
             clinic_res = supabase.table("clinics").select("*").eq("id", appt["clinic_id"]).single().execute()
             clinic = clinic_res.data or {}
             if clinic.get("google_calendar_connected"):
+                # If this appointment already had an event (e.g. staff is
+                # re-confirming after a reschedule request), clear the old
+                # slot first so it doesn't leave a stale duplicate behind.
+                old_event_id = appt.get("google_event_id", "")
+                if old_event_id:
+                    calendar_agent.delete_calendar_event(clinic, old_event_id, sb=supabase)
+
                 calendar_result = calendar_agent.create_calendar_event(
                     clinic, appt.get("visitor_name", ""), appt.get("visitor_contact", ""),
                     appt.get("requested_text", ""), confirmed_time, sb=supabase,
                 )
+                if calendar_result and calendar_result.get("ok"):
+                    update["google_event_id"] = calendar_result.get("event_id", "")
         except Exception:
             pass
 
     try:
         supabase.table("appointments").update(update).eq("id", appointment_id).eq("user_id", uid).execute()
+
+        # Best-effort confirmation email with the visitor's manage link.
+        # Failure here shouldn't fail the confirm action itself.
+        if confirmed_time and notifications.is_email(appt.get("visitor_contact", "")):
+            try:
+                profile_res = supabase.table("profiles").select("gmail, full_name").eq("id", uid).single().execute()
+                profile = profile_res.data or {}
+                sender_email = profile.get("gmail", "")
+                if sender_email:
+                    manage_url = f"{SITE_URL}/appointment/{appointment_id}/manage"
+                    when = confirmed_time.replace("T", " ")
+                    body = (
+                        f"<p>Hi {appt.get('visitor_name') or 'there'},</p>"
+                        f"<p>Your appointment with <strong>{clinic.get('clinic_name', 'us')}</strong> "
+                        f"is confirmed for <strong>{when}</strong>.</p>"
+                        f"<p>Need to change or cancel? <a href=\"{manage_url}\">{manage_url}</a></p>"
+                    )
+                    notifications.send_email(
+                        appt.get("visitor_contact", ""), appt.get("visitor_name", ""),
+                        sender_email, clinic.get("clinic_name", "") or profile.get("full_name", ""),
+                        f"Appointment confirmed: {clinic.get('clinic_name', '')}", body,
+                    )
+            except Exception:
+                pass
+
         result = {"ok": True}
         if calendar_result is not None:
             result["calendar"] = calendar_result
@@ -668,6 +737,117 @@ def api_widget_message():
         return jsonify({"ok": False, "reply": "Something went wrong, please refresh and try again."})
     result = conversation_agent.handle_message(conversation_id, message, sb=supabase)
     return jsonify(result)
+
+
+# ======================================================
+#  SELF-SERVE RESCHEDULE / CANCEL
+#  Public routes (no login) reached via the link sent in the booking
+#  confirmation and reminder emails. The appointment's UUID acts as the
+#  access token, same trust model as e.g. a calendar invite link,
+#  deliberately simple per the pivot plan's scope discipline (no
+#  separate auth system for visitors).
+# ======================================================
+@app.route("/appointment/<appointment_id>/manage")
+def appointment_manage_page(appointment_id):
+    try:
+        appt_res = supabase.table("appointments").select("*").eq("id", appointment_id).single().execute()
+        appt = appt_res.data
+    except Exception:
+        appt = None
+    if not appt:
+        return render_template("manage_appointment.html", found=False)
+
+    clinic_name = ""
+    try:
+        clinic_res = supabase.table("clinics").select("clinic_name").eq("id", appt["clinic_id"]).single().execute()
+        clinic_name = (clinic_res.data or {}).get("clinic_name", "")
+    except Exception:
+        pass
+
+    return render_template(
+        "manage_appointment.html", found=True, appointment=appt,
+        appointment_id=appointment_id, clinic_name=clinic_name,
+    )
+
+
+@app.route("/api/appointments/<appointment_id>/reschedule-request", methods=["POST"])
+def api_appointment_reschedule_request(appointment_id):
+    """
+    Visitor-facing: they don't get to pick an exact new slot (no
+    availability-checking engine, out of scope per the pivot plan),
+    they just say what they'd prefer in free text, same as the
+    original booking flow. Staff sees it flagged in the dashboard and
+    re-confirms with a real time, same /confirm endpoint as before,
+    which also clears the old calendar event automatically.
+    """
+    data = request.get_json(silent=True) or {}
+    new_preference = (data.get("preferred_text") or "").strip()
+    if not new_preference:
+        return jsonify({"ok": False, "message": "Please share your preferred new date/time."})
+
+    try:
+        appt_res = supabase.table("appointments").select("*").eq("id", appointment_id).single().execute()
+        appt = appt_res.data
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+    if not appt:
+        return jsonify({"ok": False, "message": "Appointment not found."})
+    if appt.get("status") == "cancelled":
+        return jsonify({"ok": False, "message": "This appointment was already cancelled."})
+
+    try:
+        supabase.table("appointments").update({
+            "status": "reschedule_requested",
+            "reschedule_requested_text": new_preference,
+        }).eq("id", appointment_id).execute()
+        _log_appointment_activity(appt, "reschedule_requested", new_preference)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+
+
+@app.route("/api/appointments/<appointment_id>/cancel", methods=["POST"])
+def api_appointment_cancel(appointment_id):
+    try:
+        appt_res = supabase.table("appointments").select("*").eq("id", appointment_id).single().execute()
+        appt = appt_res.data
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+    if not appt:
+        return jsonify({"ok": False, "message": "Appointment not found."})
+    if appt.get("status") == "cancelled":
+        return jsonify({"ok": True})  # already cancelled, nothing more to do
+
+    try:
+        clinic_res = supabase.table("clinics").select("*").eq("id", appt["clinic_id"]).single().execute()
+        clinic = clinic_res.data or {}
+        event_id = appt.get("google_event_id", "")
+        if event_id and clinic.get("google_calendar_connected"):
+            calendar_agent.delete_calendar_event(clinic, event_id, sb=supabase)
+    except Exception:
+        pass
+
+    try:
+        supabase.table("appointments").update({
+            "status": "cancelled",
+            "cancelled_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", appointment_id).execute()
+        _log_appointment_activity(appt, "cancelled", "Cancelled by visitor via manage link")
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+
+
+def _log_appointment_activity(appt: dict, event_type: str, detail: str):
+    try:
+        supabase.table("activity_log").insert({
+            "conversation_id": appt.get("conversation_id"),
+            "user_id": appt.get("user_id"),
+            "event_type": event_type,
+            "detail": detail,
+        }).execute()
+    except Exception:
+        pass
 
 
 # ======================================================

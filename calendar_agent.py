@@ -225,3 +225,34 @@ def create_calendar_event(clinic: dict, visitor_name: str, visitor_contact: str,
         return {"ok": True, "event_id": data.get("id", ""), "event_link": data.get("htmlLink", "")}
     except Exception as e:
         return {"ok": False, "message": str(e)}
+
+
+# ======================================================
+#  DELETE EVENT (cancel, or clear the old slot before a reschedule)
+# ======================================================
+def delete_calendar_event(clinic: dict, event_id: str, sb=None) -> dict:
+    """
+    Removes a previously-created event, e.g. when a visitor cancels, or
+    right before creating the new event for a reschedule. Safe to call
+    even if the event was already deleted on Google's side (404 is
+    treated as success, since the end state we want is already true).
+    """
+    sb = sb or _get_supabase()
+    if not clinic.get("google_calendar_connected") or not event_id:
+        return {"ok": True, "message": "Nothing to delete."}
+
+    access_token = _refresh_access_token(clinic, sb)
+    if not access_token:
+        return {"ok": False, "message": "Could not refresh Google Calendar access, please reconnect."}
+
+    try:
+        resp = requests.delete(
+            f"{CALENDAR_EVENTS_URL}/{event_id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=(10, 15),
+        )
+        if resp.status_code >= 400 and resp.status_code != 404 and resp.status_code != 410:
+            return {"ok": False, "message": f"Google Calendar rejected the delete: {resp.text}"}
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}

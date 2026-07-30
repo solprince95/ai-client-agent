@@ -1240,9 +1240,15 @@ async function selectConversation(id) {
   if (apptData.ok && apptData.appointment) {
     const a = apptData.appointment;
     apptEl.style.display = 'block';
+    let extra = '';
+    if (a.status === 'requested' || a.status === 'reschedule_requested') {
+      extra = `&nbsp;·&nbsp;<button class="btn-secondary" style="padding:2px 8px;font-size:.72rem;" onclick="confirmAppointment('${a.id}')">${a.status === 'reschedule_requested' ? 'Confirm New Time' : 'Mark Confirmed'}</button>`;
+    }
+    const reschedNote = a.status === 'reschedule_requested' && a.reschedule_requested_text
+      ? `<br/><span style="color:var(--blue2);">Visitor asked to reschedule: "${a.reschedule_requested_text}"</span>` : '';
+    const cancelNote = a.status === 'cancelled' ? `<br/><span style="color:var(--red, #e5484d);">Cancelled by visitor.</span>` : '';
     apptEl.innerHTML = `<strong>Booking requested:</strong> ${a.requested_text || '(no detail captured)'}
-      &nbsp;·&nbsp; Status: ${a.status}
-      ${a.status === 'requested' ? `&nbsp;·&nbsp;<button class="btn-secondary" style="padding:2px 8px;font-size:.72rem;" onclick="confirmAppointment('${a.id}')">Mark Confirmed</button>` : ''}`;
+      &nbsp;·&nbsp; Status: ${a.status}${extra}${reschedNote}${cancelNote}`;
   } else {
     apptEl.style.display = 'none';
   }

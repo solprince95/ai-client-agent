@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Manage Your Appointment: Vajra Labs</title>
+<link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+<style>
+  :root {
+    --bg: #07070f; --s1: #0d0d1a; --s2: #12121f; --blue: #1d6aff; --blue2: #5591ff;
+    --green: #1fa85c; --red: #e5484d; --t1: #eceeff; --t2: #7880aa; --t3: #3a3f60; --bdr: rgba(255,255,255,.08);
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--t1); font-family: 'Inter', system-ui, sans-serif; line-height:1.6; }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 56px 24px 100px; }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  .sub { color: var(--t2); font-size: 14px; margin-bottom: 28px; }
+  .card { background: var(--s1); border: 1px solid var(--bdr); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+  .row { display:flex; justify-content:space-between; gap:12px; margin-bottom: 10px; font-size: 14px; }
+  .label { color: var(--t3); }
+  .status { display:inline-block; padding: 2px 10px; border-radius: 6px; font-size: 12px; }
+  .status-confirmed { background: rgba(31,168,92,.15); color: var(--green); }
+  .status-cancelled { background: rgba(229,72,77,.15); color: var(--red); }
+  .status-other { background: rgba(85,145,255,.15); color: var(--blue2); }
+  textarea { width:100%; background: var(--s2); border: 1px solid var(--bdr); border-radius: 8px; color: var(--t1);
+    padding: 10px 12px; font-size: 14px; font-family: inherit; resize: vertical; min-height: 70px; }
+  button { border: none; border-radius: 8px; padding: 10px 16px; font-size: 14px; cursor: pointer; font-weight: 600; margin-top: 10px; }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-danger { background: transparent; color: var(--red); border: 1px solid rgba(229,72,77,.4); }
+  .msg { font-size: 13px; margin-top: 10px; }
+  .msg-ok { color: var(--green); }
+  .msg-err { color: var(--red); }
+  a.back { color: var(--t2); font-size: 13px; text-decoration:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+{% if not found %}
+  <h1>We couldn't find that appointment</h1>
+  <p class="sub">This link may be out of date, or the appointment may have been removed. If you think this is a mistake, please contact the clinic directly.</p>
+{% else %}
+  <h1>Manage your appointment</h1>
+  <div class="sub">{{ clinic_name or "Your clinic" }}</div>
+
+  <div class="card">
+    <div class="row"><span class="label">Status</span>
+      <span class="status {% if appointment.status == 'confirmed' %}status-confirmed{% elif appointment.status == 'cancelled' %}status-cancelled{% else %}status-other{% endif %}">
+        {{ appointment.status }}
+      </span>
+    </div>
+    {% if appointment.confirmed_time %}
+    <div class="row"><span class="label">Confirmed time</span><span>{{ appointment.confirmed_time }}</span></div>
+    {% endif %}
+    {% if appointment.requested_text %}
+    <div class="row"><span class="label">Originally requested</span><span>{{ appointment.requested_text }}</span></div>
+    {% endif %}
+  </div>
+
+  {% if appointment.status == 'cancelled' %}
+    <p class="sub">This appointment has been cancelled. If you'd like to book again, please start a new chat with the clinic.</p>
+  {% elif appointment.status == 'reschedule_requested' %}
+    <p class="sub">Your reschedule request has been sent to the clinic. They'll confirm a new time shortly, you'll get an email once it's set.</p>
+  {% else %}
+    <div class="card">
+      <div class="label" style="margin-bottom:8px;">Need a different time?</div>
+      <textarea id="pref" placeholder="e.g. Could we do Thursday afternoon instead?"></textarea>
+      <button class="btn-primary" onclick="requestReschedule()">Request reschedule</button>
+      <div id="resched-msg" class="msg"></div>
+    </div>
+
+    <div class="card">
+      <div class="label" style="margin-bottom:8px;">Can't make it at all?</div>
+      <button class="btn-danger" onclick="cancelAppointment()">Cancel appointment</button>
+      <div id="cancel-msg" class="msg"></div>
+    </div>
+  {% endif %}
+{% endif %}
+</div>
+
+<script>
+const appointmentId = {{ appointment_id | tojson if found else 'null' }};
+
+async function requestReschedule() {
+  const pref = document.getElementById('pref').value.trim();
+  const msgEl = document.getElementById('resched-msg');
+  if (!pref) { msgEl.textContent = 'Please tell us your preferred new time.'; msgEl.className = 'msg msg-err'; return; }
+  try {
+    const res = await fetch(`/api/appointments/${appointmentId}/reschedule-request`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preferred_text: pref }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      msgEl.textContent = "Sent. The clinic will confirm a new time shortly.";
+      msgEl.className = 'msg msg-ok';
+    } else {
+      msgEl.textContent = data.message || 'Something went wrong.';
+      msgEl.className = 'msg msg-err';
+    }
+  } catch (e) {
+    msgEl.textContent = 'Network error, please try again.';
+    msgEl.className = 'msg msg-err';
+  }
+}
+
+async function cancelAppointment() {
+  if (!confirm('Cancel this appointment?')) return;
+  const msgEl = document.getElementById('cancel-msg');
+  try {
+    const res = await fetch(`/api/appointments/${appointmentId}/cancel`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      location.reload();
+    } else {
+      msgEl.textContent = data.message || 'Something went wrong.';
+      msgEl.className = 'msg msg-err';
+    }
+  } catch (e) {
+    msgEl.textContent = 'Network error, please try again.';
+    msgEl.className = 'msg msg-err';
+  }
+}
+</script>
+</body>
+</html>

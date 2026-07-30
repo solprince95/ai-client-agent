@@ -6,6 +6,27 @@ Based on 20+ real sales calls with zero conversions on the outbound model, and c
 
 ---
 
+## Build status (updated 30 Jul 2026)
+All ten v1 core-loop features below are now built:
+
+1. Instant lead response — ✅ web chat widget live
+2. Lead qualification — ✅ `conversation_agent.py`
+3. Clinic knowledge base / FAQ — ✅
+4. Appointment booking — ✅ real Google Calendar integration
+5. Reminders and rescheduling — ✅ `reminder_agent.py` (24h-before email reminder) + self-serve reschedule/cancel via `/appointment/<id>/manage`
+6. Auto follow-up sequences — ✅ `followup_agent.py`
+7. Human takeover — ✅ dashboard live-conversation view
+8. Consent and opt-in capture — ✅
+9. Activity log / audit trail — ✅
+10. Simple CRM sync (Sheets) — **deliberately skipped.** The dashboard reads live from Supabase and already does everything the Sheets sync was a stand-in for (and does it better: real-time, takeover buttons, appointment status), so a Sheets copy would just be redundant. Revisit only if a specific need comes up (e.g. handing raw data to someone who won't use the dashboard) — that'd be a small one-off CSV export, not a live sync.
+
+**What's left is not engineering:**
+- WhatsApp channel — blocked on Meta Business Verification/App Review, capped at 5 test recipients in the meantime.
+- First paying customer — the actual goal every feature above serves.
+- Infra migration off Render to Google Cloud Run — in progress, blocked on GCP billing identity verification (submitted, pending review as of 30 Jul 2026). See `CLOUD_RUN_MIGRATION.md`.
+
+---
+
 ## Why this pivot makes sense
 The rejected product asked businesses to trust a stranger's cold outreach. The new product solves a problem business owners already feel acutely: **leads going cold because nobody replies fast enough.** This is a felt, urgent pain, not a "nice to have," and it's a well-proven category (Meta itself launched "Business AI on WhatsApp" for Indian SMBs in May 2026, confirming real market demand). The differentiator isn't novelty, it's execution and niche focus.
 
@@ -24,6 +45,7 @@ These become the actual product. In priority build order:
 8. **Consent and opt-in capture** — clear opt-in before follow-up messaging, especially required for WhatsApp business-initiated messages, and just good practice under India's data protection rules
 9. **Activity log / audit trail** — who replied, when the bot handed over, what got booked, clinics care about this for accountability
 10. **Simple CRM sync** — every lead, score, and conversation logged to Google Sheets, explicitly a temporary MVP sync layer, not the long-term CRM
+
 
 ## What to add (net-new engineering)
 - **Inbound message webhook(s)** — currently the product only sends, it never receives. This is the single biggest architecture change.

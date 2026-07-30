@@ -19,14 +19,14 @@ particular request.
 """
 
 import os
-import re
 from datetime import datetime, timedelta
 
 import requests
 
+import notifications
+
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 MODEL = "claude-haiku-4-5-20251001"
-BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
 
 # (follow_up_count when due, hours since last activity required)
 FOLLOW_UP_SCHEDULE = [
@@ -48,10 +48,6 @@ def _get_supabase():
     except Exception:
         pass
     return None
-
-
-def _is_email(contact: str) -> bool:
-    return bool(re.match(r"^[\w.+-]+@[\w-]+\.[\w.-]+$", (contact or "").strip()))
 
 
 def _log(conversation_id, user_id, event_type, detail, sb):
@@ -87,7 +83,7 @@ def find_due_conversations(sb=None) -> list:
     now = datetime.utcnow()
     for conv in rows:
         contact = conv.get("visitor_contact", "")
-        if not _is_email(contact):
+        if not notifications.is_email(contact):
             continue  # no email captured, or phone-only, leave for staff
 
         count = conv.get("follow_up_count", 0)
@@ -160,26 +156,6 @@ def _write_followup_message(clinic: dict, conv: dict, attempt_number: int) -> st
         return fallback
 
 
-def _send_email(to_email: str, to_name: str, sender_email: str, sender_name: str, subject: str, body: str) -> bool:
-    if not BREVO_API_KEY or not sender_email:
-        return False
-    try:
-        response = requests.post(
-            "https://api.brevo.com/v3/smtp/email",
-            headers={"api-key": BREVO_API_KEY, "Content-Type": "application/json"},
-            json={
-                "sender": {"name": sender_name, "email": sender_email},
-                "to": [{"email": to_email, "name": to_name or ""}],
-                "subject": subject,
-                "htmlContent": body,
-            },
-            timeout=(10, 15),
-        )
-        return response.status_code < 400
-    except Exception:
-        return False
-
-
 # ======================================================
 #  MAIN ENTRY (called on a schedule)
 # ======================================================
@@ -210,7 +186,7 @@ def run_followup_check(sb=None, log=print) -> dict:
         body = _write_followup_message(clinic, conv, attempt_number)
         subject = f"Following up, {clinic.get('clinic_name', 'your enquiry')}"
 
-        ok = _send_email(
+        ok = notifications.send_email(
             conv.get("visitor_contact", ""),
             conv.get("visitor_name", ""),
             sender_email,
