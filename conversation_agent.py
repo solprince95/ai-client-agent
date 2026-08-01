@@ -11,14 +11,15 @@ website, opens the chat widget, and this module:
   5. Hands off to Booking Agent (next phase) or a human
 
 Python controls the deterministic parts (which question we're on, when
-consent is required, when to log activity). Claude handles the natural
+consent is required, when to log activity). Gemini handles the natural
 language: answering FAQs in the moment, phrasing the next question
 naturally, and judging whether the visitor's last message actually
 answered the current question.
 
-Requires ANTHROPIC_API_KEY (same one Research Agent uses). Degrades to
+Uses Gemini via Google Cloud Vertex AI (see gemini_client.py).
+Degrades to
 a simple, honest "I'm having trouble responding right now" message if
-the API isn't configured or a call fails, never crashes the widget.
+Vertex isn't configured or a call fails, never crashes the widget.
 """
 
 import os
@@ -28,8 +29,9 @@ from datetime import datetime
 
 import requests
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-MODEL = "claude-haiku-4-5-20251001"
+import gemini_client
+
+MODEL = "gemini-2.5-flash"
 
 DEFAULT_QUALIFICATION_QUESTIONS = [
     "What are you looking to get help with today?",
@@ -39,7 +41,7 @@ DEFAULT_QUALIFICATION_QUESTIONS = [
 
 
 def engine_configured() -> bool:
-    return bool(ANTHROPIC_API_KEY)
+    return gemini_client.is_configured()
 
 
 def _get_supabase():
@@ -55,29 +57,10 @@ def _get_supabase():
 
 
 # ======================================================
-#  CLAUDE CALL
+#  AI CALL (Gemini via Google Cloud Vertex AI, see gemini_client.py)
 # ======================================================
-def _call_claude(system_prompt: str, user_prompt: str, max_tokens: int = 300) -> str:
-    resp = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": MODEL,
-            "max_tokens": max_tokens,
-            "system": system_prompt,
-            "messages": [{"role": "user", "content": user_prompt}],
-        },
-        timeout=(10, 20),
-    )
-    if resp.status_code >= 400:
-        raise Exception(resp.text)
-    data = resp.json()
-    parts = [b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"]
-    return "".join(parts).strip()
+def _call_ai(system_prompt: str, user_prompt: str, max_tokens: int = 300) -> str:
+    return gemini_client.generate(system_prompt, user_prompt, model=MODEL, max_tokens=max_tokens)
 
 
 def _parse_json_block(text: str) -> dict:
@@ -283,7 +266,7 @@ def handle_message(conversation_id: str, visitor_message: str, sb=None) -> dict:
 
 
 # ======================================================
-#  CLAUDE TURNS
+#  AI TURNS
 # ======================================================
 def _clinic_context(clinic: dict) -> str:
     return (
@@ -317,7 +300,7 @@ def _run_qualification_turn(clinic: dict, current_question: str, visitor_message
         f"Visitor just said: {visitor_message}"
     )
     try:
-        raw = _call_claude(system_prompt, user_prompt, max_tokens=250)
+        raw = _call_ai(system_prompt, user_prompt, max_tokens=250)
         return _parse_json_block(raw)
     except Exception:
         return {"answered": False, "extracted_answer": "", "reply": "Sorry, could you say that again?"}
@@ -328,7 +311,7 @@ def _run_contact_capture_turn(visitor_message: str) -> dict:
     Captures an email or phone number so Follow-up Agent has somewhere
     to reach the visitor later if they don't complete booking. Kept as
     its own small, deterministic-ish step, simple pattern matching first,
-    Claude only as a fallback for oddly-phrased replies.
+    Gemini only as a fallback for oddly-phrased replies.
     """
     email_match = re.search(r"[\w.+-]+@[\w-]+\.[\w.-]+", visitor_message)
     phone_match = re.search(r"(\+?\d[\d\s-]{7,14}\d)", visitor_message)
@@ -349,7 +332,7 @@ def _run_contact_capture_turn(visitor_message: str) -> dict:
         'email or phone if found, else empty", "reply": "natural reply, re-asking if not found"}'
     )
     try:
-        raw = _call_claude(system_prompt, f"Visitor said: {visitor_message}", max_tokens=150)
+        raw = _call_ai(system_prompt, f"Visitor said: {visitor_message}", max_tokens=150)
         return _parse_json_block(raw)
     except Exception:
         return {"contact_captured": False, "reply": "Could you share an email or phone number to reach you at?"}
@@ -376,7 +359,7 @@ def _run_booking_turn(clinic: dict, visitor_message: str) -> dict:
     )
     user_prompt = f"Clinic info:\n{_clinic_context(clinic)}\n\nVisitor said: {visitor_message}"
     try:
-        raw = _call_claude(system_prompt, user_prompt, max_tokens=200)
+        raw = _call_ai(system_prompt, user_prompt, max_tokens=200)
         return _parse_json_block(raw)
     except Exception:
         return {"time_captured": False, "requested_text": "", "reply": "What date or time works best for you? We'll confirm shortly."}
@@ -392,7 +375,7 @@ def _run_faq_turn(clinic: dict, visitor_message: str) -> str:
     )
     user_prompt = f"Clinic info:\n{_clinic_context(clinic)}\n\nVisitor said: {visitor_message}"
     try:
-        text = _call_claude(system_prompt, user_prompt, max_tokens=150)
+        text = _call_ai(system_prompt, user_prompt, max_tokens=150)
         return text.strip() if text.strip() else "Someone from our team will follow up with you shortly."
     except Exception:
         return "Someone from our team will follow up with you shortly."

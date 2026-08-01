@@ -6,3 +6,4 @@ cryptography
 gunicorn
 razorpay
 APScheduler
+google-genai

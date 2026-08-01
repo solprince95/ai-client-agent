@@ -7,9 +7,9 @@ actually does, and a specific detail worth referencing in the outreach
 message. Both agents then use this same cached profile, so a lead is
 only researched once, not once per channel.
 
-Uses Claude Haiku (fast, cheap, plenty for this) via the Anthropic API.
-Requires ANTHROPIC_API_KEY as an environment variable on Render. If it's
-not set, everything degrades gracefully: no research happens, and
+Uses Gemini (fast, cheap, plenty for this) via Google Cloud Vertex AI
+(see gemini_client.py). Requires GOOGLE_CLOUD_PROJECT to be set. If
+it's not, everything degrades gracefully: no research happens, and
 Email/WhatsApp Agent fall back to their original template-based
 messages, nothing breaks.
 """
@@ -23,14 +23,15 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-MODEL = "claude-haiku-4-5-20251001"
+import gemini_client
+
+MODEL = "gemini-2.5-flash"
 
 RESEARCH_MAX_AGE_DAYS = 60  # re-research a lead after this long, businesses change
 
 
 def research_configured() -> bool:
-    return bool(ANTHROPIC_API_KEY)
+    return gemini_client.is_configured()
 
 
 def _get_supabase():
@@ -68,33 +69,14 @@ def _extract_visible_text(url: str, max_chars: int = 3500) -> str:
 
 
 # ======================================================
-#  CLAUDE CALL
+#  AI CALL
 # ======================================================
-def _call_claude(system_prompt: str, user_prompt: str, max_tokens: int = 400) -> str:
-    resp = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": MODEL,
-            "max_tokens": max_tokens,
-            "system": system_prompt,
-            "messages": [{"role": "user", "content": user_prompt}],
-        },
-        timeout=(10, 25),
-    )
-    if resp.status_code >= 400:
-        raise Exception(resp.text)
-    data = resp.json()
-    parts = [b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"]
-    return "".join(parts).strip()
+def _call_ai(system_prompt: str, user_prompt: str, max_tokens: int = 400) -> str:
+    return gemini_client.generate(system_prompt, user_prompt, model=MODEL, max_tokens=max_tokens)
 
 
 def _parse_json_block(text: str) -> dict:
-    """Claude sometimes wraps JSON in ```json fences even when told not
+    """Gemini sometimes wraps JSON in ```json fences even when told not
     to, strip those before parsing."""
     cleaned = text.strip()
     cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
@@ -146,7 +128,7 @@ def research_business(business_name: str, website: str, config: dict) -> dict:
     )
 
     try:
-        raw = _call_claude(system_prompt, user_prompt, max_tokens=300)
+        raw = _call_ai(system_prompt, user_prompt, max_tokens=300)
         profile = _parse_json_block(raw)
         return {
             "summary": profile.get("summary", fallback["summary"]),
@@ -160,7 +142,7 @@ def research_business(business_name: str, website: str, config: dict) -> dict:
 def get_or_research(lead_row: dict, config: dict, user_id: str, supabase=None) -> dict:
     """
     Checks a lead's cached research on the leads table first. Only calls
-    Claude (and re-saves) if there's no cache yet, or it's stale.
+    Gemini (and re-saves) if there's no cache yet, or it's stale.
     """
     sb = supabase or _get_supabase()
 
@@ -227,7 +209,7 @@ def write_email(business_name: str, research: dict, config: dict) -> tuple:
         f"reply 'Unsubscribe' to opt out."
     )
     try:
-        raw = _call_claude(system_prompt, user_prompt, max_tokens=350)
+        raw = _call_ai(system_prompt, user_prompt, max_tokens=350)
         data = _parse_json_block(raw)
         subject = data.get("subject", "").strip()
         body = data.get("body", "").strip()
@@ -262,7 +244,7 @@ def write_whatsapp_message(business_name: str, research: dict, config: dict) -> 
         f"End with a line offering to reply STOP to opt out."
     )
     try:
-        text = _call_claude(system_prompt, user_prompt, max_tokens=150)
+        text = _call_ai(system_prompt, user_prompt, max_tokens=150)
         return text.strip() if text.strip() else None
     except Exception:
         return None

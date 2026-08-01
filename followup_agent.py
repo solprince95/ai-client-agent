@@ -24,9 +24,9 @@ from datetime import datetime, timedelta
 import requests
 
 import notifications
+import gemini_client
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-MODEL = "claude-haiku-4-5-20251001"
+MODEL = "gemini-2.5-flash"
 
 # (follow_up_count when due, hours since last activity required)
 FOLLOW_UP_SCHEDULE = [
@@ -106,27 +106,8 @@ def find_due_conversations(sb=None) -> list:
 # ======================================================
 #  WRITE + SEND
 # ======================================================
-def _call_claude(system_prompt: str, user_prompt: str, max_tokens: int = 150) -> str:
-    resp = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": MODEL,
-            "max_tokens": max_tokens,
-            "system": system_prompt,
-            "messages": [{"role": "user", "content": user_prompt}],
-        },
-        timeout=(10, 20),
-    )
-    if resp.status_code >= 400:
-        raise Exception(resp.text)
-    data = resp.json()
-    parts = [b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"]
-    return "".join(parts).strip()
+def _call_ai(system_prompt: str, user_prompt: str, max_tokens: int = 150) -> str:
+    return gemini_client.generate(system_prompt, user_prompt, model=MODEL, max_tokens=max_tokens)
 
 
 def _write_followup_message(clinic: dict, conv: dict, attempt_number: int) -> str:
@@ -134,7 +115,7 @@ def _write_followup_message(clinic: dict, conv: dict, attempt_number: int) -> st
         f"Hi, just following up on your enquiry with {clinic.get('clinic_name','us')}, "
         f"still happy to help whenever works for you. Reply here anytime."
     )
-    if not ANTHROPIC_API_KEY:
+    if not gemini_client.is_configured():
         return fallback
 
     system_prompt = (
@@ -150,7 +131,7 @@ def _write_followup_message(clinic: dict, conv: dict, attempt_number: int) -> st
         f"What they were asking about: {conv.get('answers', {})}\n"
     )
     try:
-        text = _call_claude(system_prompt, user_prompt)
+        text = _call_ai(system_prompt, user_prompt)
         return text.strip() if text.strip() else fallback
     except Exception:
         return fallback

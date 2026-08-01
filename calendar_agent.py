@@ -11,7 +11,7 @@ explicitly out of scope for now, see the pivot plan).
 
 Uses raw HTTP calls to Google's OAuth and Calendar APIs (no google-api-
 python-client dependency), consistent with how the rest of this app
-talks to Razorpay/WhatsApp/Anthropic.
+talks to Razorpay/WhatsApp/Gemini.
 """
 
 import os
