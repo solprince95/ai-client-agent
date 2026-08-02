@@ -10,11 +10,35 @@
     return;
   }
 
+  var storageKey = "vajra_conv_" + clinicId;
+
   var state = {
     conversationId: null,
     consentGiven: false,
     open: false,
   };
+
+  function loadSavedState() {
+    try {
+      var raw = localStorage.getItem(storageKey);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveState() {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({
+        conversationId: state.conversationId,
+        consentGiven: state.consentGiven,
+      }));
+    } catch (e) {
+      // localStorage unavailable (private browsing, etc.) - not fatal,
+      // just means this visitor won't be remembered across page loads.
+    }
+  }
 
   var css = "" +
     "#vajra-chat-bubble{position:fixed;bottom:20px;right:20px;width:58px;height:58px;border-radius:50%;background:#1d6aff;box-shadow:0 4px 18px rgba(0,0,0,.2);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:999999;border:none;}" +
@@ -82,7 +106,20 @@
     panel.classList.add("open");
     state.open = true;
     if (!state.conversationId) {
-      startConversation();
+      var saved = loadSavedState();
+      if (saved && saved.conversationId) {
+        state.conversationId = saved.conversationId;
+        state.consentGiven = !!saved.consentGiven;
+        addMessage("bot", "Welcome back! How can we help?");
+        if (state.consentGiven) {
+          inputRowEl.style.display = "flex";
+          inputEl.focus();
+        } else {
+          consentEl.style.display = "block";
+        }
+      } else {
+        startConversation();
+      }
     }
   }
 
@@ -114,6 +151,7 @@
         state.conversationId = data.conversation_id;
         addMessage("bot", data.greeting);
         consentEl.style.display = "block";
+        saveState();
       })
       .catch(function () {
         setTyping(false);
@@ -134,6 +172,7 @@
           consentEl.style.display = "none";
           inputRowEl.style.display = "flex";
           inputEl.focus();
+          saveState();
         }
       });
   });
@@ -154,6 +193,19 @@
         setTyping(false);
         if (data.human_takeover) {
           return; // a staff member has taken over, bot stays quiet, staff replies come through a future poll
+        }
+        if (!data.ok && /could not be found/i.test(data.reply || "")) {
+          // The conversation ID we had (likely from a stale localStorage
+          // entry, e.g. from before this device remembered conversations,
+          // or a conversation that's since been deleted) no longer
+          // exists server-side. Recover automatically instead of leaving
+          // the visitor stuck on a dead end forever.
+          try { localStorage.removeItem(storageKey); } catch (e) {}
+          state.conversationId = null;
+          state.consentGiven = false;
+          addMessage("bot", "Sorry about that, let's start fresh. One moment...");
+          startConversation();
+          return;
         }
         if (data.reply) {
           addMessage("bot", data.reply);
