@@ -786,39 +786,6 @@ body {
       <div class="card">
         <div class="card-title">Account</div>
         <div class="form-grid">
-          <div class="form-field">
-            <label class="field-label">Full Name</label>
-            <input type="text" class="field-inp" id="full_name" placeholder="Your name"/>
-          </div>
-          <div class="form-field">
-            <label class="field-label">Gmail Address</label>
-            <input type="email" class="field-inp" id="gmail" placeholder="your@gmail.com"/>
-          </div>
-          <div class="form-field full">
-            <label class="field-label">WhatsApp</label>
-            <div class="whatsapp-connect-row">
-              <button class="save-btn whatsapp-connect-btn" id="connect-whatsapp-btn" onclick="connectWhatsApp()" type="button">Connect WhatsApp</button>
-              <span id="whatsapp-status" style="font-weight:700;margin-left:10px;"></span>
-            </div>
-            <div class="field-hint">
-              Opens Meta's secure sign-in to link your WhatsApp Business number, no manual setup needed.
-              This one-click option isn't ready yet, use manual setup below until then.
-            </div>
-
-            <div style="margin-top:14px;">
-              <button type="button" class="field-hint" style="background:none;border:none;padding:0;cursor:pointer;text-decoration:underline;color:var(--blue2);" onclick="toggleWhatsAppManual()">Connect manually instead</button>
-              <div id="whatsapp-manual-fields" style="display:none;margin-top:12px;">
-                <input type="text" class="field-inp" id="wa_access_token" placeholder="Access Token" style="margin-bottom:8px;"/>
-                <input type="text" class="field-inp" id="wa_phone_number_id" placeholder="Phone Number ID" style="margin-bottom:8px;"/>
-                <input type="text" class="field-inp" id="wa_business_account_id" placeholder="WhatsApp Business Account ID" style="margin-bottom:8px;"/>
-                <button class="save-btn" id="save-whatsapp-manual-btn" onclick="saveWhatsAppManual()" type="button">Save WhatsApp Details</button>
-                <div class="field-hint">
-                  Find these in Meta App Dashboard -> WhatsApp -> API Setup. A temporary access token lasts 24 hours,
-                  for anything longer-term you'll want a permanent token later.
-                </div>
-              </div>
-            </div>
-          </div>
           <div class="form-field full">
             <label class="field-label">Google Calendar</label>
             <div class="whatsapp-connect-row">
@@ -831,10 +798,6 @@ body {
             </div>
           </div>
         </div>
-        <div class="save-row" style="margin-top:16px;">
-          <button class="save-btn" id="save-profile-btn" onclick="saveProfile()">Save Account</button>
-          <span class="save-feedback" id="save-msg"></span>
-        </div>
       </div>
 
       <div class="card">
@@ -846,23 +809,41 @@ body {
           </div>
           <div class="form-field">
             <label class="field-label">Clinic Type</label>
-            <input type="text" class="field-inp" id="clinic_type" placeholder="e.g. Dental"/>
+            <select class="field-inp" id="clinic_type" onchange="toggleOtherField('clinic_type', 'clinic_type_other')">
+              <option value="Dental">Dental</option>
+              <option value="Dermatology / Skin">Dermatology / Skin</option>
+              <option value="Physiotherapy">Physiotherapy</option>
+              <option value="General Practice">General Practice</option>
+              <option value="Eye Care">Eye Care</option>
+              <option value="ENT">ENT</option>
+              <option value="Pediatric">Pediatric</option>
+              <option value="Gynecology">Gynecology</option>
+              <option value="Orthopedic">Orthopedic</option>
+              <option value="Ayurvedic / Wellness">Ayurvedic / Wellness</option>
+              <option value="Other">Other</option>
+            </select>
+            <input type="text" class="field-inp" id="clinic_type_other" placeholder="Enter your clinic type" style="margin-top:8px;display:none;"/>
           </div>
           <div class="form-field">
             <label class="field-label">Hours</label>
-            <input type="text" class="field-inp" id="clinic_hours" placeholder="e.g. Mon-Sat 10am-7pm"/>
+            <select class="field-inp" id="clinic_hours" onchange="toggleOtherField('clinic_hours', 'clinic_hours_other')">
+              <option value="Mon-Sat, 9:00 AM - 6:00 PM">Mon-Sat, 9:00 AM - 6:00 PM</option>
+              <option value="Mon-Sat, 10:00 AM - 7:00 PM">Mon-Sat, 10:00 AM - 7:00 PM</option>
+              <option value="Mon-Sat, 9:00 AM - 1:00 PM & 4:00 PM - 8:00 PM">Mon-Sat, 9:00 AM - 1:00 PM &amp; 4:00 PM - 8:00 PM</option>
+              <option value="Mon-Fri, 9:00 AM - 5:00 PM">Mon-Fri, 9:00 AM - 5:00 PM</option>
+              <option value="Mon-Sun, 9:00 AM - 9:00 PM">Mon-Sun, 9:00 AM - 9:00 PM</option>
+              <option value="Open 24 hours">Open 24 hours</option>
+              <option value="Other">Other</option>
+            </select>
+            <input type="text" class="field-inp" id="clinic_hours_other" placeholder="Enter your hours" style="margin-top:8px;display:none;"/>
           </div>
           <div class="form-field">
             <label class="field-label">Location</label>
             <input type="text" class="field-inp" id="clinic_location" placeholder="e.g. Nikol, Ahmedabad"/>
           </div>
           <div class="form-field full">
-            <label class="field-label">Services</label>
-            <textarea class="field-ta" id="clinic_services" placeholder="List your services, one idea per line..."></textarea>
-          </div>
-          <div class="form-field full">
-            <label class="field-label">Pricing Notes</label>
-            <textarea class="field-ta" id="clinic_pricing" placeholder="Rough pricing or how pricing works, kept general is fine..."></textarea>
+            <label class="field-label">Services &amp; Pricing</label>
+            <textarea class="field-ta" id="clinic_services" placeholder="List your services and rough pricing together, one per line, e.g. Dental checkup - Rs 300..."></textarea>
           </div>
           <div class="form-field full">
             <label class="field-label">FAQs</label>
@@ -972,12 +953,6 @@ async function loadProfile() {
   if (!data.ok) return;
   const p = data.profile;
   window._myProfile = p;
-  document.getElementById('full_name').value      = p.full_name || '';
-  document.getElementById('gmail').value          = p.gmail || '';
-
-  const waSt = document.getElementById('whatsapp-status');
-  waSt.textContent = p.has_whatsapp ? '✅ Connected' : 'Not connected';
-  waSt.style.color = p.has_whatsapp ? 'var(--green)' : 'var(--red)';
 
   // Plan badge
   const badge = document.getElementById('plan-badge');
@@ -1077,106 +1052,6 @@ async function startUpgrade() {
   }
 }
 
-function toggleWhatsAppManual() {
-  const el = document.getElementById('whatsapp-manual-fields');
-  el.style.display = el.style.display === 'none' ? 'block' : 'none';
-}
-
-async function refreshWhatsAppStatusOnly() {
-  const res  = await fetch('/api/profile');
-  const data = await res.json();
-  if (!data.ok) return;
-  window._myProfile = data.profile;
-  const waSt = document.getElementById('whatsapp-status');
-  waSt.textContent = data.profile.has_whatsapp ? '✅ Connected' : 'Not connected';
-  waSt.style.color = data.profile.has_whatsapp ? 'var(--green)' : 'var(--red)';
-}
-
-async function saveWhatsAppManual() {
-  const btn = document.getElementById('save-whatsapp-manual-btn');
-  const token   = document.getElementById('wa_access_token').value.trim();
-  const phoneId = document.getElementById('wa_phone_number_id').value.trim();
-  const wabaId  = document.getElementById('wa_business_account_id').value.trim();
-
-  if (!token || !phoneId) {
-    alert('Access Token and Phone Number ID are both required.');
-    return;
-  }
-
-  btn.disabled = true; btn.textContent = 'Saving...';
-  try {
-    const res = await fetch('/api/profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        whatsapp_access_token: token,
-        whatsapp_phone_number_id: phoneId,
-        whatsapp_business_account_id: wabaId,
-      })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      document.getElementById('wa_access_token').value = '';
-      await refreshWhatsAppStatusOnly();
-      alert('WhatsApp connected.');
-    } else {
-      alert(data.message || 'Could not save.');
-    }
-  } catch (e) {
-    alert('Network error, please try again.');
-  }
-  btn.disabled = false; btn.textContent = 'Save WhatsApp Details';
-}
-
-async function connectWhatsApp() {
-  const btn = document.getElementById('connect-whatsapp-btn');
-  const st  = document.getElementById('whatsapp-status');
-  btn.disabled = true; btn.textContent = 'Connecting...';
-  try {
-    const res  = await fetch('/api/whatsapp/connect', { method: 'POST' });
-    const data = await res.json();
-    if (data.ok) {
-      // Real flow: launch Meta's Embedded Signup popup here using
-      // data.app_id / data.config_id, then re-check /api/profile
-      // once the popup reports success.
-      await loadProfile();
-    } else {
-      st.textContent = data.message || 'Could not connect right now.';
-      st.style.color = 'var(--red)';
-    }
-  } catch (e) {
-    st.textContent = 'Network error. Please try again.';
-    st.style.color = 'var(--red)';
-  }
-  btn.disabled = false; btn.textContent = 'Connect WhatsApp';
-}
-
-async function saveProfile() {
-  const msg = document.getElementById('save-msg');
-  const btn = document.getElementById('save-profile-btn');
-  const data = {
-    full_name: document.getElementById('full_name').value,
-    gmail:     document.getElementById('gmail').value,
-  };
-  btn.disabled = true;
-  msg.style.display = 'inline'; msg.style.color = 'var(--t3)'; msg.textContent = 'Saving...';
-  try {
-    const res    = await fetch('/api/profile', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
-    const result = await res.json();
-    if (res.status === 401) { window.location.href = '/'; return; }
-    if (result.ok) {
-      msg.style.color = 'var(--green)'; msg.textContent = 'Saved successfully.';
-      await loadProfile();
-    } else {
-      msg.style.color = 'var(--red)'; msg.textContent = result.message || 'Could not save.';
-    }
-  } catch(e) {
-    msg.style.color = 'var(--red)'; msg.textContent = 'Network error.';
-  } finally {
-    btn.disabled = false;
-    setTimeout(() => { msg.style.display = 'none'; }, 3500);
-  }
-}
 
 /* ── Conversations ───────────────────────────────────── */
 let _currentConversationId = null;
@@ -1313,17 +1188,51 @@ async function disconnectCalendar() {
   loadClinic();
 }
 
+/* ── Dropdown-with-"Other" fields (Clinic Type, Hours) ──────────── */
+function toggleOtherField(selectId, otherId) {
+  const sel = document.getElementById(selectId);
+  const other = document.getElementById(otherId);
+  other.style.display = sel.value === 'Other' ? 'block' : 'none';
+}
+
+function loadDropdownWithOther(selectId, otherId, savedValue) {
+  const sel = document.getElementById(selectId);
+  const other = document.getElementById(otherId);
+  const knownValues = Array.from(sel.options).map(o => o.value);
+  if (savedValue && knownValues.includes(savedValue)) {
+    sel.value = savedValue;
+    other.style.display = 'none';
+  } else if (savedValue) {
+    sel.value = 'Other';
+    other.value = savedValue;
+    other.style.display = 'block';
+  } else {
+    sel.selectedIndex = 0;
+    other.style.display = 'none';
+  }
+}
+
+function getDropdownWithOtherValue(selectId, otherId) {
+  const sel = document.getElementById(selectId);
+  if (sel.value === 'Other') {
+    return document.getElementById(otherId).value.trim();
+  }
+  return sel.value;
+}
+
 async function loadClinic() {
   const res  = await fetch('/api/clinic');
   const data = await res.json();
   if (!data.ok) return;
   const c = data.clinic || {};
   document.getElementById('clinic_name').value     = c.clinic_name || '';
-  document.getElementById('clinic_type').value     = c.clinic_type || '';
-  document.getElementById('clinic_hours').value    = c.hours || '';
+  loadDropdownWithOther('clinic_type', 'clinic_type_other', c.clinic_type || '');
+  loadDropdownWithOther('clinic_hours', 'clinic_hours_other', c.hours || '');
   document.getElementById('clinic_location').value = c.location || '';
-  document.getElementById('clinic_services').value = c.services || '';
-  document.getElementById('clinic_pricing').value  = c.pricing_notes || '';
+  // Services & Pricing were two separate fields before, now merged into
+  // one. Prefer the merged services value; fall back to pricing_notes
+  // for clinics saved before this change so nothing looks blank.
+  document.getElementById('clinic_services').value = c.services || c.pricing_notes || '';
   document.getElementById('clinic_faqs').value     = c.faqs || '';
 
   const questions = (c.qualification_questions && c.qualification_questions.length)
@@ -1382,11 +1291,11 @@ async function saveClinic() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         clinic_name: document.getElementById('clinic_name').value.trim(),
-        clinic_type: document.getElementById('clinic_type').value.trim(),
-        hours: document.getElementById('clinic_hours').value.trim(),
+        clinic_type: getDropdownWithOtherValue('clinic_type', 'clinic_type_other'),
+        hours: getDropdownWithOtherValue('clinic_hours', 'clinic_hours_other'),
         location: document.getElementById('clinic_location').value.trim(),
         services: document.getElementById('clinic_services').value.trim(),
-        pricing_notes: document.getElementById('clinic_pricing').value.trim(),
+        pricing_notes: document.getElementById('clinic_services').value.trim(),
         faqs: document.getElementById('clinic_faqs').value.trim(),
         qualification_questions: questions,
       })

@@ -520,7 +520,12 @@ def api_list_conversations():
     uid = session["user_id"]
     try:
         res = supabase.table("conversations").select("*").eq("user_id", uid).order("updated_at", desc=True).execute()
-        return jsonify({"ok": True, "conversations": res.data or []})
+        rows = res.data or []
+        # Only show conversations where we actually know who the visitor
+        # is - someone who opened the widget and never said anything
+        # (or never gave a name/contact) isn't a lead yet, just noise.
+        identified = [r for r in rows if r.get("visitor_name") or r.get("visitor_contact")]
+        return jsonify({"ok": True, "conversations": identified})
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)})
 

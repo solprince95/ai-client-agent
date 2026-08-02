@@ -64,10 +64,18 @@ def _call_ai(system_prompt: str, user_prompt: str, max_tokens: int = 300) -> str
 
 
 def _parse_json_block(text: str) -> dict:
-    cleaned = text.strip()
-    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-    cleaned = re.sub(r"\s*```$", "", cleaned)
-    return json.loads(cleaned)
+    """
+    Gemini is instructed to reply with ONLY a JSON object, but in
+    practice sometimes adds a stray leading/trailing sentence or wraps
+    it in code fences anyway. Rather than assume clean formatting,
+    find the first {...} block in the text and parse that specifically,
+    much more forgiving than the old strip-fences-and-hope approach,
+    which is what was causing occasional silent fallbacks mid-chat.
+    """
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        raise ValueError(f"No JSON object found in model output: {text[:200]!r}")
+    return json.loads(match.group(0))
 
 
 # ======================================================
@@ -197,6 +205,20 @@ def handle_message(conversation_id: str, visitor_message: str, sb=None) -> dict:
 
     _save_message(conversation_id, "visitor", visitor_message, sb)
 
+    # Name capture runs every turn, independent of stage/questions, since
+    # a visitor might state their name at any point in the conversation,
+    # not just when explicitly asked. Only tries once we don't have one
+    # yet, and never overwrites an existing name.
+    if not conv.get("visitor_name"):
+        name = _extract_name(visitor_message)
+        if name:
+            try:
+                sb.table("conversations").update({"visitor_name": name}).eq("id", conversation_id).execute()
+                conv["visitor_name"] = name
+                _log(conversation_id, conv.get("user_id"), "name_captured", name, sb)
+            except Exception:
+                pass
+
     clinic_res = sb.table("clinics").select("*").eq("id", conv["clinic_id"]).single().execute()
     clinic = clinic_res.data or {}
     questions = get_questions(clinic)
@@ -269,13 +291,17 @@ def handle_message(conversation_id: str, visitor_message: str, sb=None) -> dict:
 #  AI TURNS
 # ======================================================
 def _clinic_context(clinic: dict) -> str:
+    # Services and Pricing Notes used to be two separate Setup fields,
+    # now merged into one ("Services & Pricing"). Both DB columns still
+    # get written (mirrored) so older code paths don't break, but here
+    # we only want to show the visitor-facing content once.
+    services_and_pricing = clinic.get("services", "") or clinic.get("pricing_notes", "")
     return (
         f"Clinic name: {clinic.get('clinic_name','')}\n"
         f"Clinic type: {clinic.get('clinic_type','')}\n"
         f"Hours: {clinic.get('hours','')}\n"
         f"Location: {clinic.get('location','')}\n"
-        f"Services: {clinic.get('services','')}\n"
-        f"Pricing notes: {clinic.get('pricing_notes','')}\n"
+        f"Services & pricing: {services_and_pricing}\n"
         f"FAQs: {clinic.get('faqs','')}\n"
     )
 
@@ -283,10 +309,18 @@ def _clinic_context(clinic: dict) -> str:
 def _run_qualification_turn(clinic: dict, current_question: str, visitor_message: str, answers_so_far: dict) -> dict:
     system_prompt = (
         "You are Qualify Agent, a friendly front-desk assistant for a clinic, chatting with a "
-        "website visitor. You are currently trying to get an answer to ONE specific question. "
-        "If the visitor's message answers it (even loosely), extract that answer. If they instead "
-        "asked something else (a question about hours, pricing, services), answer it briefly and "
-        "naturally using the clinic info provided, then still ask the current question. "
+        "website visitor. You are currently trying to get an answer to ONE specific question, "
+        "given below as 'current question'. If the visitor's message answers it (even loosely), "
+        "extract that answer. If they instead asked something else (a question about hours, "
+        "pricing, services), answer it briefly and naturally using the clinic info provided, "
+        "then still ask the current question. "
+        "IMPORTANT: your reply must end by asking the current question, and ONLY the current "
+        "question, in your own natural words. Do not ask a different question, do not ask an "
+        "additional question, do not jump ahead to a question that hasn't been reached yet, "
+        "even if the conversation seems to be heading that way naturally. "
+        "If the visitor asks something unrelated to the clinic (like whether their appointment "
+        "is booked, or general chit-chat), answer honestly and briefly if you can from the "
+        "context, or say a team member will help with that, then still ask the current question. "
         "Sound like a real person texting, not a form. No exclamation marks, no markdown, no emoji. "
         "Keep replies under 40 words. "
         "Respond with ONLY a JSON object: "
@@ -295,7 +329,7 @@ def _run_qualification_turn(clinic: dict, current_question: str, visitor_message
     )
     user_prompt = (
         f"Clinic info:\n{_clinic_context(clinic)}\n"
-        f"Question we're trying to get answered: {current_question}\n"
+        f"Current question (ask only this one): {current_question}\n"
         f"Answers already collected: {json.dumps(answers_so_far)}\n"
         f"Visitor just said: {visitor_message}"
     )
@@ -304,6 +338,41 @@ def _run_qualification_turn(clinic: dict, current_question: str, visitor_message
         return _parse_json_block(raw)
     except Exception:
         return {"answered": False, "extracted_answer": "", "reply": "Sorry, could you say that again?"}
+
+
+_NAME_PATTERNS = [
+    re.compile(r"\b(?i:my name is)\s+([A-Z][a-zA-Z'\-]+(?:\s+[A-Z][a-zA-Z'\-]+){0,2})"),
+    re.compile(r"\b(?i:this is)\s+([A-Z][a-zA-Z'\-]+(?:\s+[A-Z][a-zA-Z'\-]+){0,2})\b"),
+    re.compile(r"\b(?i:i'?m)\s+([A-Z][a-zA-Z'\-]+(?:\s+[A-Z][a-zA-Z'\-]+){0,2})\b"),
+    re.compile(r"\b(?i:i am)\s+([A-Z][a-zA-Z'\-]+(?:\s+[A-Z][a-zA-Z'\-]+){0,2})\b"),
+]
+
+# Common words that pattern-match the shape of a name but aren't one,
+# e.g. "I'm looking for..." or "I am not sure" would otherwise wrongly
+# capture "Looking" or "Not" as a name.
+_NAME_STOPWORDS = {
+    "looking", "trying", "not", "just", "here", "interested", "calling",
+    "writing", "wondering", "hoping", "asking", "sorry", "fine", "good",
+    "okay", "ready", "available", "free", "busy", "new", "a", "the",
+}
+
+
+def _extract_name(visitor_message: str) -> str:
+    """
+    Best-effort extraction of a visitor's name from something they said,
+    e.g. "My name is Ravi" or "I'm Priya". Regex first (cheap, no AI
+    call needed for the common phrasing), returns empty string if
+    nothing looks like a stated name. Deliberately conservative: a
+    false negative (missing a real name) is far less costly here than
+    a false positive (saving "Looking" as someone's name).
+    """
+    for pattern in _NAME_PATTERNS:
+        match = pattern.search(visitor_message)
+        if match:
+            candidate = match.group(1).strip()
+            if candidate.lower() not in _NAME_STOPWORDS and len(candidate) >= 2:
+                return candidate
+    return ""
 
 
 def _run_contact_capture_turn(visitor_message: str) -> dict:
