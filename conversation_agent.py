@@ -336,7 +336,8 @@ def _run_qualification_turn(clinic: dict, current_question: str, visitor_message
     try:
         raw = _call_ai(system_prompt, user_prompt, max_tokens=250)
         return _parse_json_block(raw)
-    except Exception:
+    except Exception as e:
+        print(f"Qualify Agent turn failed: {type(e).__name__}: {e}")
         return {"answered": False, "extracted_answer": "", "reply": "Sorry, could you say that again?"}
 
 
@@ -403,7 +404,8 @@ def _run_contact_capture_turn(visitor_message: str) -> dict:
     try:
         raw = _call_ai(system_prompt, f"Visitor said: {visitor_message}", max_tokens=150)
         return _parse_json_block(raw)
-    except Exception:
+    except Exception as e:
+        print(f"Contact capture turn failed: {type(e).__name__}: {e}")
         return {"contact_captured": False, "reply": "Could you share an email or phone number to reach you at?"}
 
 
@@ -430,7 +432,8 @@ def _run_booking_turn(clinic: dict, visitor_message: str) -> dict:
     try:
         raw = _call_ai(system_prompt, user_prompt, max_tokens=200)
         return _parse_json_block(raw)
-    except Exception:
+    except Exception as e:
+        print(f"Booking turn failed: {type(e).__name__}: {e}")
         return {"time_captured": False, "requested_text": "", "reply": "What date or time works best for you? We'll confirm shortly."}
 
 
@@ -446,7 +449,8 @@ def _run_faq_turn(clinic: dict, visitor_message: str) -> str:
     try:
         text = _call_ai(system_prompt, user_prompt, max_tokens=150)
         return text.strip() if text.strip() else "Someone from our team will follow up with you shortly."
-    except Exception:
+    except Exception as e:
+        print(f"Done-stage turn failed: {type(e).__name__}: {e}")
         return "Someone from our team will follow up with you shortly."
 
 

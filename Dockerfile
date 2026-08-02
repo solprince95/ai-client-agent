@@ -14,6 +14,11 @@ COPY . .
 
 # Cloud Run injects PORT (usually 8080) at runtime; gunicorn must bind to it.
 ENV PORT=8080
+# Without this, Python buffers stdout when it's not an interactive
+# terminal (which it never is in a container) - print() statements can
+# sit in a buffer and never actually reach Cloud Run's logs, which is
+# exactly what was masking real errors during debugging.
+ENV PYTHONUNBUFFERED=1
 EXPOSE 8080
 
 # Same worker layout as the Procfile used on Render.
