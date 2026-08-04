@@ -45,6 +45,14 @@ def generate(system_prompt: str, user_prompt: str, model: str, max_tokens: int =
     user prompt in, plain response text out. Raises on failure, callers
     already wrap this in their own try/except with a graceful-degrade
     fallback reply.
+
+    thinking_budget=0 disables Gemini 2.5's internal reasoning tokens.
+    Those tokens count against max_output_tokens by default, and for
+    these simple, low-latency conversational turns (answer extraction,
+    short replies) they were silently eating the whole token budget
+    before the model ever got to writing the actual visible response,
+    causing responses to truncate mid-JSON. This task doesn't need
+    chain-of-thought reasoning, so thinking is switched off entirely.
     """
     from google.genai import types
 
@@ -55,6 +63,7 @@ def generate(system_prompt: str, user_prompt: str, model: str, max_tokens: int =
         config=types.GenerateContentConfig(
             system_instruction=system_prompt,
             max_output_tokens=max_tokens,
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
         ),
     )
     return (response.text or "").strip()
