@@ -323,7 +323,8 @@ def _run_qualification_turn(clinic: dict, current_question: str, visitor_message
         "context, or say a team member will help with that, then still ask the current question. "
         "Sound like a real person texting, not a form. No exclamation marks, no markdown, no emoji. "
         "Keep replies under 40 words. "
-        "Respond with ONLY a JSON object: "
+        "Respond with ONLY a JSON object, nothing before or after it, no markdown code fences, "
+        "no ```json wrapper, just the raw JSON starting with {: "
         '{"answered": true or false, "extracted_answer": "short answer if answered, else empty", '
         '"reply": "your natural reply to send the visitor"}'
     )
@@ -334,7 +335,7 @@ def _run_qualification_turn(clinic: dict, current_question: str, visitor_message
         f"Visitor just said: {visitor_message}"
     )
     try:
-        raw = _call_ai(system_prompt, user_prompt, max_tokens=250)
+        raw = _call_ai(system_prompt, user_prompt, max_tokens=400)
         return _parse_json_block(raw)
     except Exception as e:
         print(f"Qualify Agent turn failed: {type(e).__name__}: {e}")
@@ -398,11 +399,12 @@ def _run_contact_capture_turn(visitor_message: str) -> dict:
     system_prompt = (
         "The visitor was asked for their email or phone number. Check if their message "
         "actually contains one (even informally written). No exclamation marks, no markdown. "
-        'Respond with ONLY a JSON object: {"contact_captured": true or false, "contact": "the '
+        "Respond with ONLY a JSON object, no code fences: "
+        '{"contact_captured": true or false, "contact": "the '
         'email or phone if found, else empty", "reply": "natural reply, re-asking if not found"}'
     )
     try:
-        raw = _call_ai(system_prompt, f"Visitor said: {visitor_message}", max_tokens=150)
+        raw = _call_ai(system_prompt, f"Visitor said: {visitor_message}", max_tokens=250)
         return _parse_json_block(raw)
     except Exception as e:
         print(f"Contact capture turn failed: {type(e).__name__}: {e}")
@@ -424,13 +426,13 @@ def _run_booking_turn(clinic: dict, visitor_message: str) -> dict:
         "'as soon as possible'), treat it as captured and confirm it back warmly, letting them "
         "know the clinic will confirm the exact slot. If they haven't given a date/time yet, "
         "ask for one naturally. No exclamation marks, no markdown, no emoji, under 40 words. "
-        "Respond with ONLY a JSON object: "
+        "Respond with ONLY a JSON object, no code fences: "
         '{"time_captured": true or false, "requested_text": "what they said about timing, if captured", '
         '"reply": "your natural reply to send the visitor"}'
     )
     user_prompt = f"Clinic info:\n{_clinic_context(clinic)}\n\nVisitor said: {visitor_message}"
     try:
-        raw = _call_ai(system_prompt, user_prompt, max_tokens=200)
+        raw = _call_ai(system_prompt, user_prompt, max_tokens=350)
         return _parse_json_block(raw)
     except Exception as e:
         print(f"Booking turn failed: {type(e).__name__}: {e}")
@@ -447,7 +449,7 @@ def _run_faq_turn(clinic: dict, visitor_message: str) -> str:
     )
     user_prompt = f"Clinic info:\n{_clinic_context(clinic)}\n\nVisitor said: {visitor_message}"
     try:
-        text = _call_ai(system_prompt, user_prompt, max_tokens=150)
+        text = _call_ai(system_prompt, user_prompt, max_tokens=250)
         return text.strip() if text.strip() else "Someone from our team will follow up with you shortly."
     except Exception as e:
         print(f"Done-stage turn failed: {type(e).__name__}: {e}")
