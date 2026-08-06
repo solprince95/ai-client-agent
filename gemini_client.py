@@ -57,13 +57,20 @@ def generate(system_prompt: str, user_prompt: str, model: str, max_tokens: int =
     from google.genai import types
 
     client = _get_client()
-    response = client.models.generate_content(
-        model=model,
-        contents=user_prompt,
-        config=types.GenerateContentConfig(
+    try:
+        config = types.GenerateContentConfig(
             system_instruction=system_prompt,
             max_output_tokens=max_tokens,
             thinking_config=types.ThinkingConfig(thinking_budget=0),
-        ),
-    )
+        )
+        response = client.models.generate_content(model=model, contents=user_prompt, config=config)
+    except Exception as e:
+        # If the installed SDK version doesn't support thinking_config
+        # the way we expect (this has happened before - version drift
+        # between environments), don't take down every conversation
+        # over it. Retry once without it; thinking just means slightly
+        # higher latency/cost, not broken output.
+        print(f"gemini_client: thinking_config unsupported ({type(e).__name__}: {e}), retrying without it")
+        config = types.GenerateContentConfig(system_instruction=system_prompt, max_output_tokens=max_tokens)
+        response = client.models.generate_content(model=model, contents=user_prompt, config=config)
     return (response.text or "").strip()
