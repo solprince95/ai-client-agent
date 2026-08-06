@@ -232,7 +232,8 @@ def handle_message(conversation_id: str, visitor_message: str, sb=None) -> dict:
 
     if stage == "qualifying" and q_index < len(questions):
         current_question = questions[q_index]
-        result = _run_qualification_turn(clinic, current_question, visitor_message, conv.get("answers") or {})
+        next_question = questions[q_index + 1] if q_index + 1 < len(questions) else None
+        result = _run_qualification_turn(clinic, current_question, next_question, visitor_message, conv.get("answers") or {})
 
         updates = {}
         answers = dict(conv.get("answers") or {})
@@ -306,21 +307,27 @@ def _clinic_context(clinic: dict) -> str:
     )
 
 
-def _run_qualification_turn(clinic: dict, current_question: str, visitor_message: str, answers_so_far: dict) -> dict:
+def _run_qualification_turn(clinic: dict, current_question: str, next_question: str | None,
+                             visitor_message: str, answers_so_far: dict) -> dict:
     system_prompt = (
         "You are Qualify Agent, a friendly front-desk assistant for a clinic, chatting with a "
         "website visitor. You are currently trying to get an answer to ONE specific question, "
-        "given below as 'current question'. If the visitor's message answers it (even loosely), "
-        "extract that answer. If they instead asked something else (a question about hours, "
-        "pricing, services), answer it briefly and naturally using the clinic info provided, "
-        "then still ask the current question. "
-        "IMPORTANT: your reply must end by asking the current question, and ONLY the current "
-        "question, in your own natural words. Do not ask a different question, do not ask an "
-        "additional question, do not jump ahead to a question that hasn't been reached yet, "
-        "even if the conversation seems to be heading that way naturally. "
+        "given below as 'current question'. If the visitor's message answers it (even loosely, "
+        "even a one-word answer), set answered=true, extract that answer, briefly acknowledge it, "
+        "then ask the 'next question' given below, in your own natural words. If there is no next "
+        "question, say something brief and natural to wrap up (like you'll pull up their details), "
+        "don't ask anything further. "
+        "If the visitor's message does NOT answer the current question, set answered=false, and ask "
+        "the current question again, rephrased somewhat differently than how you or the visitor just "
+        "worded it, so it doesn't feel like a broken loop. "
+        "Never ask the same question twice in a row in nearly identical wording, and never ask both "
+        "the current and next question in the same reply, only one question per reply. "
+        "If the visitor instead asked something else (about hours, pricing, services), answer it "
+        "briefly and naturally using the clinic info provided, then ask whichever question is "
+        "appropriate (current if unanswered, next if the current one was just answered). "
         "If the visitor asks something unrelated to the clinic (like whether their appointment "
         "is booked, or general chit-chat), answer honestly and briefly if you can from the "
-        "context, or say a team member will help with that, then still ask the current question. "
+        "context, or say a team member will help with that, then continue with the appropriate question. "
         "Sound like a real person texting, not a form. No exclamation marks, no markdown, no emoji. "
         "Keep replies under 40 words. "
         "Respond with ONLY a JSON object, nothing before or after it, no markdown code fences, "
@@ -330,7 +337,9 @@ def _run_qualification_turn(clinic: dict, current_question: str, visitor_message
     )
     user_prompt = (
         f"Clinic info:\n{_clinic_context(clinic)}\n"
-        f"Current question (ask only this one): {current_question}\n"
+        f"Current question (the one we need an answer to right now): {current_question}\n"
+        f"Next question (ask this ONLY if the visitor just answered the current one): "
+        f"{next_question if next_question else '(none - this is the last question)'}\n"
         f"Answers already collected: {json.dumps(answers_so_far)}\n"
         f"Visitor just said: {visitor_message}"
     )
