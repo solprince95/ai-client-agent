@@ -1066,7 +1066,9 @@ async function loadConversations() {
       return;
     }
     listEl.innerHTML = data.conversations.map(c => {
-      const label = c.visitor_name || c.visitor_contact || 'Website visitor';
+      const label = c.visitor_name
+        ? (c.visitor_contact ? `${c.visitor_name} · ${c.visitor_contact}` : c.visitor_name)
+        : (c.visitor_contact || 'Website visitor');
       const scoreColor = c.score === 'hot' ? 'var(--red)' : c.score === 'warm' ? 'var(--blue2)' : 'var(--t3)';
       return `<div class="lead-row" style="cursor:pointer;padding:10px;border-radius:8px;margin-bottom:4px;" onclick="selectConversation('${c.id}')">
         <div style="font-weight:600;font-size:.85rem;">${label}</div>
@@ -1087,7 +1089,10 @@ async function selectConversation(id) {
   const data = await res.json();
   const conv = (data.conversations || []).find(c => c.id === id);
   if (conv) {
-    document.getElementById('conv-visitor').textContent = conv.visitor_name || conv.visitor_contact || 'Website visitor';
+    const headerLabel = conv.visitor_name
+      ? (conv.visitor_contact ? `${conv.visitor_name} · ${conv.visitor_contact}` : conv.visitor_name)
+      : (conv.visitor_contact || 'Website visitor');
+    document.getElementById('conv-visitor').textContent = headerLabel;
     document.getElementById('conv-score').textContent = 'Score: ' + (conv.score || 'not scored yet') + ' · Status: ' + conv.status;
     const inTakeover = conv.status === 'human_takeover';
     document.getElementById('takeover-btn').style.display = inTakeover ? 'none' : 'inline-block';

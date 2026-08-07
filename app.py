@@ -744,6 +744,40 @@ def api_widget_message():
     return jsonify(result)
 
 
+@app.route("/api/widget/poll/<conversation_id>", methods=["GET"])
+def api_widget_poll(conversation_id):
+    """
+    Public, no login (same access-token-via-UUID trust model as the
+    rest of the widget's routes). Lets the chat widget check for new
+    messages it doesn't have yet - specifically staff replies sent
+    from the dashboard during human takeover, which otherwise have no
+    way to ever reach the visitor's browser. ?after=N returns only
+    messages beyond the first N (the widget tracks how many messages
+    it's already rendered and passes that back each poll).
+    """
+    after = request.args.get("after", "0")
+    try:
+        after = max(0, int(after))
+    except ValueError:
+        after = 0
+    try:
+        conv = supabase.table("conversations").select("id, status").eq("id", conversation_id).single().execute()
+        if not conv.data:
+            return jsonify({"ok": False, "messages": [], "status": None})
+        res = supabase.table("messages").select("role, content").eq("conversation_id", conversation_id) \
+            .order("created_at").execute()
+        rows = res.data or []
+        new_rows = rows[after:]
+        return jsonify({
+            "ok": True,
+            "messages": [{"role": r["role"], "content": r["content"]} for r in new_rows],
+            "total_count": len(rows),
+            "status": conv.data.get("status"),
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e), "messages": []})
+
+
 # ======================================================
 #  SELF-SERVE RESCHEDULE / CANCEL
 #  Public routes (no login) reached via the link sent in the booking

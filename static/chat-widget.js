@@ -16,6 +16,8 @@
     conversationId: null,
     consentGiven: false,
     open: false,
+    messageCount: 0,
+    pollTimer: null,
   };
 
   function loadSavedState() {
@@ -92,14 +94,44 @@
 
   function addMessage(role, text) {
     var div = document.createElement("div");
-    div.className = "vajra-msg " + role;
+    div.className = "vajra-msg " + (role === "staff" ? "bot" : role);
     div.textContent = text;
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
+    state.messageCount++;
   }
 
   function setTyping(on) {
     typingEl.style.display = on ? "block" : "none";
+  }
+
+  function startPolling() {
+    stopPolling();
+    state.pollTimer = setInterval(function () {
+      if (!state.conversationId) return;
+      fetch(apiBase + "/api/widget/poll/" + state.conversationId + "?after=" + state.messageCount)
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.ok || !data.messages) return;
+          data.messages.forEach(function (m) {
+            if (m.role === "staff" || m.role === "bot") {
+              addMessage(m.role, m.content);
+            } else {
+              // a visitor-role message we already have locally, but the
+              // count needs to stay in sync with the server either way
+              state.messageCount++;
+            }
+          });
+        })
+        .catch(function () { /* a missed poll isn't worth surfacing to the visitor, just try again next tick */ });
+    }, 3500);
+  }
+
+  function stopPolling() {
+    if (state.pollTimer) {
+      clearInterval(state.pollTimer);
+      state.pollTimer = null;
+    }
   }
 
   function openPanel() {
@@ -110,23 +142,42 @@
       if (saved && saved.conversationId) {
         state.conversationId = saved.conversationId;
         state.consentGiven = !!saved.consentGiven;
-        addMessage("bot", "Welcome back! How can we help?");
-        if (state.consentGiven) {
-          inputRowEl.style.display = "flex";
-          inputEl.focus();
-        } else {
-          consentEl.style.display = "block";
-        }
+        fetch(apiBase + "/api/widget/poll/" + state.conversationId + "?after=0")
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data.ok && data.messages && data.messages.length) {
+              data.messages.forEach(function (m) { addMessage(m.role, m.content); });
+            } else {
+              addMessage("bot", "Welcome back! How can we help?");
+            }
+            if (state.consentGiven) {
+              inputRowEl.style.display = "flex";
+              inputEl.focus();
+            } else {
+              consentEl.style.display = "block";
+            }
+          })
+          .catch(function () {
+            addMessage("bot", "Welcome back! How can we help?");
+            if (state.consentGiven) {
+              inputRowEl.style.display = "flex";
+              inputEl.focus();
+            } else {
+              consentEl.style.display = "block";
+            }
+          });
       } else {
         startConversation();
       }
     }
+    startPolling();
   }
 
   function togglePanel() {
     if (state.open) {
       panel.classList.remove("open");
       state.open = false;
+      stopPolling();
     } else {
       openPanel();
     }
