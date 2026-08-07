@@ -51,7 +51,8 @@
 {% if not not_found %}
 <script>
 const clinicId = "{{ clinic_id }}";
-const state = { conversationId: null, consentGiven: false };
+const storageKey = "vajra_conv_" + clinicId;
+const state = { conversationId: null, consentGiven: false, messageCount: 0, pollTimer: null };
 
 const messagesEl = document.getElementById('messages');
 const typingEl   = document.getElementById('typing');
@@ -59,15 +60,56 @@ const consentEl  = document.getElementById('consent');
 const inputRowEl = document.getElementById('inputrow');
 const inputEl    = document.getElementById('input');
 
+function loadSavedState() {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function saveState() {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify({
+      conversationId: state.conversationId,
+      consentGiven: state.consentGiven,
+    }));
+  } catch (e) { /* private browsing etc, not fatal */ }
+}
+
 function addMessage(role, text) {
   const div = document.createElement('div');
-  div.className = 'msg ' + role;
+  div.className = 'msg ' + (role === 'staff' ? 'bot' : role);
   div.textContent = text;
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
+  state.messageCount++;
 }
 
 function setTyping(on) { typingEl.style.display = on ? 'block' : 'none'; }
+
+function startPolling() {
+  stopPolling();
+  state.pollTimer = setInterval(() => {
+    if (!state.conversationId) return;
+    fetch('/api/widget/poll/' + state.conversationId + '?after=' + state.messageCount)
+      .then(r => r.json())
+      .then(data => {
+        if (!data.ok || !data.messages) return;
+        data.messages.forEach(m => {
+          if (m.role === 'staff' || m.role === 'bot') {
+            addMessage(m.role, m.content);
+          } else {
+            state.messageCount++;
+          }
+        });
+      })
+      .catch(() => {});
+  }, 3500);
+}
+
+function stopPolling() {
+  if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
+}
 
 async function startConversation() {
   setTyping(true);
@@ -82,10 +124,39 @@ async function startConversation() {
     state.conversationId = data.conversation_id;
     addMessage('bot', data.greeting);
     consentEl.style.display = 'block';
+    saveState();
+    startPolling();
   } catch (e) {
     setTyping(false);
     addMessage('bot', 'Something went wrong, please refresh and try again.');
   }
+}
+
+function resumeConversation(saved) {
+  state.conversationId = saved.conversationId;
+  state.consentGiven = !!saved.consentGiven;
+  fetch('/api/widget/poll/' + state.conversationId + '?after=0')
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok && data.messages && data.messages.length) {
+        data.messages.forEach(m => addMessage(m.role, m.content));
+      } else {
+        addMessage('bot', 'Welcome back! How can we help?');
+      }
+      if (state.consentGiven) {
+        inputRowEl.style.display = 'flex';
+        inputEl.focus();
+      } else {
+        consentEl.style.display = 'block';
+      }
+      startPolling();
+    })
+    .catch(() => {
+      addMessage('bot', 'Welcome back! How can we help?');
+      if (state.consentGiven) { inputRowEl.style.display = 'flex'; inputEl.focus(); }
+      else { consentEl.style.display = 'block'; }
+      startPolling();
+    });
 }
 
 document.getElementById('consent-btn').addEventListener('click', async () => {
@@ -99,6 +170,7 @@ document.getElementById('consent-btn').addEventListener('click', async () => {
     consentEl.style.display = 'none';
     inputRowEl.style.display = 'flex';
     inputEl.focus();
+    saveState();
   }
 });
 
@@ -116,6 +188,14 @@ async function sendMessage() {
     const data = await res.json();
     setTyping(false);
     if (data.human_takeover) return;
+    if (!data.ok && /could not be found/i.test(data.reply || '')) {
+      try { localStorage.removeItem(storageKey); } catch (e) {}
+      state.conversationId = null;
+      state.consentGiven = false;
+      addMessage('bot', "Sorry about that, let's start fresh. One moment...");
+      startConversation();
+      return;
+    }
     if (data.reply) addMessage('bot', data.reply);
   } catch (e) {
     setTyping(false);
@@ -126,7 +206,12 @@ async function sendMessage() {
 document.getElementById('send').addEventListener('click', sendMessage);
 inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
 
-startConversation();
+const saved = loadSavedState();
+if (saved && saved.conversationId) {
+  resumeConversation(saved);
+} else {
+  startConversation();
+}
 </script>
 {% endif %}
 </body>

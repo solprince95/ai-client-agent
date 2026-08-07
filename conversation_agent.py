@@ -252,6 +252,12 @@ def handle_message(conversation_id: str, visitor_message: str, sb=None) -> dict:
             sb.table("conversations").update(updates).eq("id", conversation_id).execute()
 
         reply = result.get("reply", "Could you tell me a bit more?")
+        if updates.get("stage") == "contact_capture":
+            # Ask for contact info in this same reply instead of making
+            # the visitor send an extra message before we get around to
+            # asking - deterministic, not left up to the model to
+            # remember on its own.
+            reply = reply.rstrip(".!? ") + ". What's a good email or phone number to reach you at?"
 
     elif stage == "contact_capture":
         result = _run_contact_capture_turn(visitor_message)
