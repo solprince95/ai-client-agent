@@ -286,6 +286,25 @@ def handle_message(conversation_id: str, visitor_message: str, sb=None) -> dict:
             sb.table("conversations").update({"stage": "done", "status": "booked"}).eq("id", conversation_id).execute()
         reply = result.get("reply", "What date or time works best for you?")
 
+    elif stage == "done" and conv.get("status") == "booked":
+        # Visitor is following up after already booking - most often
+        # narrowing down a vague answer ("any time" -> "5pm today").
+        # Update the existing appointment's requested_text instead of
+        # dropping into generic FAQ replies that ignore what they're
+        # asking for, which is what used to happen here.
+        result = _run_booking_turn(clinic, visitor_message)
+        if result.get("time_captured"):
+            try:
+                sb.table("appointments").update({
+                    "requested_text": result.get("requested_text", visitor_message),
+                }).eq("conversation_id", conversation_id).eq("status", "requested").execute()
+                _log(conversation_id, conv["user_id"], "booking_refined", result.get("requested_text", ""), sb)
+                reply = "Got it, updated to " + result.get("requested_text", visitor_message) + ". The team will confirm shortly."
+            except Exception:
+                reply = result.get("reply", "Got it, thanks - the team will confirm your exact time shortly.")
+        else:
+            reply = _run_faq_turn(clinic, visitor_message)
+
     else:
         reply = _run_faq_turn(clinic, visitor_message)
 
