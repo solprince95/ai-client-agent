@@ -146,7 +146,7 @@ def start_conversation(clinic_id: str, user_id: str, sb=None) -> dict:
             "clinic_id": clinic_id,
             "user_id": user_id,
             "status": "active",
-            "stage": "qualifying",
+            "stage": "name_capture",
             "question_index": 0,
         }).execute()
         conversation = res.data[0]
@@ -230,6 +230,35 @@ def handle_message(conversation_id: str, visitor_message: str, sb=None) -> dict:
         _save_message(conversation_id, "bot", reply, sb)
         return {"ok": True, "reply": reply}
 
+    if stage == "name_capture":
+        if conv.get("visitor_name"):
+            # Passive extraction above already caught it in this same
+            # message (e.g. "Hi, I'm Dhruv") - move on and let the rest
+            # of this message flow into qualifying below instead of
+            # asking a name question we no longer need.
+            stage = "qualifying"
+            sb.table("conversations").update({"stage": "qualifying"}).eq("id", conversation_id).execute()
+        else:
+            result = _run_name_capture_turn(visitor_message)
+            if result.get("name_captured"):
+                name = (result.get("name") or "").strip()
+                first_question = questions[0] if questions else "What are you looking to get help with today?"
+                sb.table("conversations").update({
+                    "visitor_name": name,
+                    "stage": "qualifying",
+                    "question_index": 0,
+                }).eq("id", conversation_id).execute()
+                _log(conversation_id, conv.get("user_id"), "name_captured", name, sb)
+                reply = f"Nice to meet you, {name}. {first_question}"
+                _save_message(conversation_id, "bot", reply, sb)
+                _log(conversation_id, conv["user_id"], "bot_reply", reply[:200], sb)
+                return {"ok": True, "reply": reply}
+            else:
+                reply = result.get("reply", "Thanks for reaching out - what's your name?")
+                _save_message(conversation_id, "bot", reply, sb)
+                _log(conversation_id, conv["user_id"], "bot_reply", reply[:200], sb)
+                return {"ok": True, "reply": reply}
+
     if stage == "qualifying" and q_index < len(questions):
         current_question = questions[q_index]
         next_question = questions[q_index + 1] if q_index + 1 < len(questions) else None
@@ -269,44 +298,60 @@ def handle_message(conversation_id: str, visitor_message: str, sb=None) -> dict:
         reply = result.get("reply", "What's the best email or phone number to reach you at?")
 
     elif stage == "booking":
-        result = _run_booking_turn(clinic, visitor_message)
-        if result.get("time_captured"):
-            try:
-                sb.table("appointments").insert({
-                    "conversation_id": conversation_id,
-                    "clinic_id": conv["clinic_id"],
-                    "user_id": conv["user_id"],
-                    "visitor_name": conv.get("visitor_name", ""),
-                    "visitor_contact": conv.get("visitor_contact", ""),
-                    "requested_text": result.get("requested_text", visitor_message),
-                }).execute()
-                _log(conversation_id, conv["user_id"], "booked", result.get("requested_text", ""), sb)
-            except Exception:
-                pass
-            sb.table("conversations").update({"stage": "done", "status": "booked"}).eq("id", conversation_id).execute()
-        reply = result.get("reply", "What date or time works best for you?")
-
-    elif stage == "done" and conv.get("status") == "booked":
-        # Visitor is following up after already booking - most often
-        # narrowing down a vague answer ("any time" -> "5pm today").
-        # Update the existing appointment's requested_text instead of
-        # dropping into generic FAQ replies that ignore what they're
-        # asking for, which is what used to happen here.
-        result = _run_booking_turn(clinic, visitor_message)
-        if result.get("time_captured"):
-            try:
-                sb.table("appointments").update({
-                    "requested_text": result.get("requested_text", visitor_message),
-                }).eq("conversation_id", conversation_id).eq("status", "requested").execute()
-                _log(conversation_id, conv["user_id"], "booking_refined", result.get("requested_text", ""), sb)
-                reply = "Got it, updated to " + result.get("requested_text", visitor_message) + ". The team will confirm shortly."
-            except Exception:
-                reply = result.get("reply", "Got it, thanks - the team will confirm your exact time shortly.")
+        answers = dict(conv.get("answers") or {})
+        already_asked_for_specifics = bool(answers.get("_vague_time_prompted"))
+        if _looks_vague_time(visitor_message) and not already_asked_for_specifics:
+            # Don't lock in a near-useless "any time" as the booking -
+            # ask once for a rough day first. If they're still vague
+            # after that, we accept it rather than loop forever.
+            answers["_vague_time_prompted"] = True
+            sb.table("conversations").update({"answers": answers}).eq("id", conversation_id).execute()
+            reply = "No problem - roughly today, tomorrow, or later this week is fine, whatever's easiest to say."
         else:
-            reply = _run_faq_turn(clinic, visitor_message)
+            result = _run_booking_turn(clinic, visitor_message)
+            if result.get("time_captured"):
+                try:
+                    sb.table("appointments").insert({
+                        "conversation_id": conversation_id,
+                        "clinic_id": conv["clinic_id"],
+                        "user_id": conv["user_id"],
+                        "visitor_name": conv.get("visitor_name", ""),
+                        "visitor_contact": conv.get("visitor_contact", ""),
+                        "requested_text": result.get("requested_text", visitor_message),
+                    }).execute()
+                    _log(conversation_id, conv["user_id"], "booked", result.get("requested_text", ""), sb)
+                except Exception:
+                    pass
+                sb.table("conversations").update({"stage": "done", "status": "booked"}).eq("id", conversation_id).execute()
+            reply = result.get("reply", "What date or time works best for you?")
 
     else:
-        reply = _run_faq_turn(clinic, visitor_message)
+        if stage == "done" and _looks_like_time_refinement(visitor_message):
+            # The visitor is giving us a more specific time after we'd
+            # already locked in something vague - update the appointment
+            # on file instead of silently ignoring it via the FAQ fallback.
+            try:
+                appt_res = (
+                    sb.table("appointments")
+                    .select("id")
+                    .eq("conversation_id", conversation_id)
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                appt_rows = appt_res.data or []
+            except Exception:
+                appt_rows = []
+            if appt_rows:
+                sb.table("appointments").update({
+                    "requested_text": visitor_message.strip(),
+                }).eq("id", appt_rows[0]["id"]).execute()
+                _log(conversation_id, conv["user_id"], "booking_time_refined", visitor_message[:200], sb)
+                reply = "Got it, updating that to your requested time - our team will confirm it shortly."
+            else:
+                reply = _run_faq_turn(clinic, visitor_message)
+        else:
+            reply = _run_faq_turn(clinic, visitor_message)
 
     _save_message(conversation_id, "bot", reply, sb)
     _log(conversation_id, conv["user_id"], "bot_reply", reply[:200], sb)
@@ -390,6 +435,7 @@ _NAME_STOPWORDS = {
     "looking", "trying", "not", "just", "here", "interested", "calling",
     "writing", "wondering", "hoping", "asking", "sorry", "fine", "good",
     "okay", "ready", "available", "free", "busy", "new", "a", "the",
+    "hi", "hello", "hey", "hiya", "yo", "namaste", "yes", "no", "ok",
 }
 
 
@@ -409,6 +455,56 @@ def _extract_name(visitor_message: str) -> str:
             if candidate.lower() not in _NAME_STOPWORDS and len(candidate) >= 2:
                 return candidate
     return ""
+
+
+# A short, plain word or two with no punctuation - what someone types
+# back when directly asked "what's your name?" (e.g. "Dhruv", "Ajay
+# Patel"), as opposed to a full sentence or a question.
+_BARE_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z'\-]*(?:\s+[A-Za-z][A-Za-z'\-]*){0,2}$")
+
+
+def _run_name_capture_turn(visitor_message: str) -> dict:
+    """
+    Dedicated first turn of the conversation: gets the visitor's name
+    before qualification starts, so every lead has one on file even if
+    they never happen to phrase it as "I'm X" or "my name is X" later on.
+    """
+    stripped = visitor_message.strip()
+
+    # Same phrasing patterns as passive extraction, in case they lead
+    # with "Hi, I'm Dhruv" right away.
+    name = _extract_name(stripped)
+    if name:
+        return {"name_captured": True, "name": name, "reply": ""}
+
+    # They were just asked for their name directly, so a short bare
+    # reply like "Dhruv" or "Ajay Patel" almost certainly is one -
+    # accept it without requiring "I'm ..." phrasing.
+    if 1 <= len(stripped) <= 40 and _BARE_NAME_RE.match(stripped) and stripped.lower() not in _NAME_STOPWORDS:
+        return {"name_captured": True, "name": stripped.title(), "reply": ""}
+
+    if not engine_configured():
+        return {"name_captured": False, "reply": "Thanks for reaching out - what's your name?"}
+
+    system_prompt = (
+        "The visitor was just asked their name at the start of a clinic website chat. Check "
+        "whether their message contains a name (even just a first name, even informally "
+        "phrased, e.g. just 'dhruv' or 'its ajay here'). A greeting alone like 'hi' or 'hello' "
+        "is NOT a name. A question or unrelated statement is NOT a name. "
+        "Sound like a real person texting, not a form. No exclamation marks, no markdown. "
+        "Respond with ONLY a JSON object, nothing before or after it, no markdown code fences: "
+        '{"name_captured": true or false, "name": "their name if found, else empty", '
+        '"reply": "natural reply asking for their name, only used if not found"}'
+    )
+    try:
+        raw = _call_ai(system_prompt, f"Visitor said: {stripped}", max_tokens=200)
+        result = _parse_json_block(raw)
+        if not result.get("reply"):
+            result["reply"] = "Thanks for reaching out - what's your name?"
+        return result
+    except Exception as e:
+        print(f"Name capture turn failed: {type(e).__name__}: {e}")
+        return {"name_captured": False, "reply": "Thanks for reaching out - what's your name?"}
 
 
 def _run_contact_capture_turn(visitor_message: str) -> dict:
@@ -471,6 +567,30 @@ def _run_booking_turn(clinic: dict, visitor_message: str) -> dict:
     except Exception as e:
         print(f"Booking turn failed: {type(e).__name__}: {e}")
         return {"time_captured": False, "requested_text": "", "reply": "What date or time works best for you? We'll confirm shortly."}
+
+
+# Phrases with no real day/time information in them at all - accepting
+# these as "the booking" the moment they're said is how a specific
+# follow-up like "today 5pm" ends up getting silently dropped, since the
+# conversation has already moved on to stage "done" by the time it arrives.
+_VAGUE_TIME_PHRASES = (
+    "any time", "anytime", "whenever", "no preference", "not sure",
+    "doesn't matter", "does not matter", "dont mind", "don't mind", "flexible",
+)
+
+# A clock time (e.g. "5pm", "5:30 PM") - used after booking is "done" to
+# notice when the visitor is giving a more specific time that should
+# update the appointment on file instead of falling through to FAQ.
+_CLOCK_TIME_RE = re.compile(r"\b\d{1,2}(:\d{2})?\s*(am|pm)\b", re.IGNORECASE)
+
+
+def _looks_vague_time(text: str) -> bool:
+    t = text.lower()
+    return any(phrase in t for phrase in _VAGUE_TIME_PHRASES)
+
+
+def _looks_like_time_refinement(text: str) -> bool:
+    return bool(_CLOCK_TIME_RE.search(text))
 
 
 def _run_faq_turn(clinic: dict, visitor_message: str) -> str:
